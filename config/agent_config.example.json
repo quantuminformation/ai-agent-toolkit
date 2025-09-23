@@ -1,11 +1,11 @@
 {
   "spec_repo": {
-    "url": "https://github.com/example/specs.git",
+    "url": "https://github.com/quantuminformation/ai-agent-toolkit-spec",
     "branch": "main",
     "path": "/workspaces/specs"
   },
   "source_repo": {
-    "url": "https://github.com/example/source.git",
+    "url": "https://github.com/quantuminformation/ai-agent-toolkit-output",
     "branch": "main",
     "path": "/workspaces/source"
   },
