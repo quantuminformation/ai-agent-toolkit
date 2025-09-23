@@ -1,0 +1,24 @@
+{
+  "spec_repo": {
+    "url": "https://github.com/example/specs.git",
+    "branch": "main",
+    "path": "/workspaces/specs"
+  },
+  "source_repo": {
+    "url": "https://github.com/example/source.git",
+    "branch": "main",
+    "path": "/workspaces/source"
+  },
+  "internet_access": {
+    "mode": "codex_common",
+    "allowed_sites": [
+      "https://docs.github.com",
+      "https://pypi.org",
+      "https://developer.mozilla.org"
+    ]
+  },
+  "allow_unrestricted_mode": false,
+  "environment": {
+    "seed_data_script": "/opt/agent/scripts/seed_data.sh"
+  }
+}
