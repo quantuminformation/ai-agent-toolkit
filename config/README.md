@@ -21,5 +21,5 @@ cp config/agent_config.example.json config/agent_config.json
 | `allow_unrestricted_mode` | boolean | Defaults to `false`. Must be `true` before unrestricted network access is enabled. |
 | `environment.seed_data_script` | string | Optional path to a script that seeds non-production data when the container starts. |
 
-The helper scripts read the configuration and apply the policy by exporting environment variables for the Codex CLI entrypoint.
+The Node.js helper script reads the configuration and applies the policy by exporting environment variables for the Codex CLI entrypoint.
 

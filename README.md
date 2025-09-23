@@ -29,7 +29,7 @@ Consult [config/README.md](config/README.md) for field-level documentation.
 
 ## Docker image
 
-The provided `docker/Dockerfile` builds a Python-based image with the prerequisites for running the Codex CLI. The build installs Git, curl, and the packages required by the helper scripts. It also copies an entrypoint that reads the JSON configuration at runtime and applies the declared policy before starting the agent process.
+The provided `docker/Dockerfile` builds a lightweight Node.js image with the prerequisites for running the Codex CLI. The build installs Git, curl, and the packages required by the helper scripts. It also copies an entrypoint that reads the JSON configuration at runtime and applies the declared policy before starting the agent process.
 
 ```
 docker build -t ai-agent-toolkit:latest -f docker/Dockerfile .
@@ -44,7 +44,7 @@ docker run --rm \
   ai-agent-toolkit:latest
 ```
 
-The entrypoint invokes `scripts/bootstrap_agent.py` which performs the following steps:
+The entrypoint invokes `scripts/bootstrap_agent.js` which performs the following steps:
 
 1. Loads `agent_config.json`.
 2. Clones or updates the spec and source repositories inside `/workspaces`.

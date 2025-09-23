@@ -13,4 +13,4 @@ if [ ! -f "$CONFIG_PATH" ]; then
   fi
 fi
 
-exec /opt/agent/scripts/bootstrap_agent.py
+exec /opt/agent/scripts/bootstrap_agent.js

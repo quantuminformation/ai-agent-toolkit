@@ -1,6 +1,6 @@
 # Codex CLI setup workflow
 
-This guide explains how to prepare the Docker image and start the Codex CLI agent with the configuration system provided in this repository.
+This guide explains how to prepare the Docker image and start the Codex CLI agent with the configuration system provided in this repository. The container uses a lightweight Node.js bootstrap script to clone repositories, enforce network policy, and launch the Codex CLI command you supply.
 
 ## 1. Prepare the configuration
 

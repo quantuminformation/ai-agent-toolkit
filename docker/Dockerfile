@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM node:20-bookworm-slim
 
 ENV AGENT_HOME=/opt/agent \
     CODEX_CLI_COMMAND=""
@@ -13,7 +13,7 @@ COPY scripts ${AGENT_HOME}/scripts
 COPY config ${AGENT_HOME}/config
 COPY docker/entrypoint.sh /entrypoint.sh
 
-RUN chmod +x /entrypoint.sh ${AGENT_HOME}/scripts/bootstrap_agent.py ${AGENT_HOME}/scripts/seed_data.sh
+RUN chmod +x /entrypoint.sh ${AGENT_HOME}/scripts/bootstrap_agent.js ${AGENT_HOME}/scripts/seed_data.sh
 
 VOLUME ["/workspaces", "${AGENT_HOME}/config"]
 
