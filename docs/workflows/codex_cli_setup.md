@@ -165,6 +165,13 @@ Codex CLI behaviour.
    docker exec -it codex-agent /bin/bash
    ```
 
+   > **Need the full container ID for another command?** Run
+   > `docker container inspect --format '{{.Id}}' codex-agent` to print it
+   > directly without scanning the `docker ps` table. You can also embed that in
+   > another command — for example,
+   > `docker exec -it $(docker container inspect --format '{{.Id}}' codex-agent) /bin/bash` —
+   > but using the container name is usually simpler.
+
 3. Log in with your browser. Bind the login server to `0.0.0.0` (so Docker can
    forward traffic from your host) and pin the port to `1455` to match the
    publish rule above:
