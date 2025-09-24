@@ -175,7 +175,9 @@ Codex CLI behaviour.
 3. Log in with your browser. The CLI listens on the container side of port
    `1455`, so just make sure you publish the same port when you run Docker.
    If your CLI version supports `--port`, pass it explicitly to avoid the
-   callback using a different value:
+   callback using a different value. The CLI prints `Starting local login
+   server on http://localhost:1455` when the listener is ready—if you do not
+   see that line, wait a second before opening the browser link:
 
    ```bash
    codex auth login --port 1455
@@ -184,10 +186,10 @@ Codex CLI behaviour.
    - You’ll see a short code and a URL.
    - Open the URL on your host machine, sign in to OpenAI, and paste the code.
    - Once confirmed, the CLI is authenticated. If the browser callback hangs,
-     double-check that the container is still running and that port `1455` is
-     exposed on your `docker run` command. Some CLI releases do not support
-     `--port`; in that case simply run `codex auth login` and use the port that
-     the CLI prints (publish the same port when you start Docker).
+     double-check that the container is still running (`docker ps`) and that
+     you see `0.0.0.0:1455->1455/tcp` in the output. Some CLI releases do not
+     support `--port`; in that case simply run `codex auth login` and use the
+     port that the CLI prints (publish the same port when you start Docker).
 
 4. (Optional) To make login persist across runs, add this volume mount:
 
@@ -216,6 +218,20 @@ Codex CLI behaviour.
    docker stop codex-agent
    docker rm codex-agent
    ```
+
+> **OAuth callback troubleshooting**
+>
+> If the browser redirects to `http://localhost:1455/auth/callback` and then
+> spins forever:
+>
+> 1. Run `docker ps` and confirm the container is still running **and** the
+>    port mapping `0.0.0.0:1455->1455/tcp` is present.
+> 2. Run `docker logs codex-agent | tail` to make sure `codex auth login`
+>    printed “Starting local login server on http://localhost:1455”. If it
+>    never appeared, rerun the login command inside the container.
+> 3. Another process on your host might already be bound to port 1455. Restart
+>    the container with a different port (for example `-p 8080:1455`) and pass
+>    the same port number to `--port` during `codex auth login`.
 
 ---
 
