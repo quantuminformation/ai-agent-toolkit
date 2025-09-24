@@ -15,7 +15,7 @@ It is written for **beginners** — even if you are new to Docker or not very te
 
 2. **An OpenAI account.**
    - There are **two types of OpenAI access**:
-      - **ChatGPT Plus** → lets you use GPT-4 in the ChatGPT app.
+      - **ChatGPT Plus** → lets you use models like GPT-5 in the ChatGPT app.
       - **OpenAI API access** → gives you an API key (`sk-...`) that works with the Codex CLI.
    - ⚠️ Having ChatGPT Plus does *not* automatically give you API access.
    - To check: log in at [platform.openai.com](https://platform.openai.com/).
@@ -83,7 +83,7 @@ This is where you choose **Option A (API key)** or **Option B (browser login)**.
      -v "$PWD/config:/opt/agent/config" \
      -v "$PWD/workspaces:/workspaces" \
      -e OPENAI_API_KEY="sk-your-api-key" \
-     -e CODEX_CLI_COMMAND="codex-cli run --config /opt/agent/runtime/network_policy.json" \
+     -e CODEX_CLI_COMMAND="codex run --config /opt/agent/runtime/network_policy.json" \
      ai-agent-toolkit:latest
    ```
 
@@ -99,7 +99,7 @@ The agent will start automatically and use your API key.
    docker run -d \
      -v "$PWD/config:/opt/agent/config" \
      -v "$PWD/workspaces:/workspaces" \
-     -e CODEX_CLI_COMMAND="codex-cli run --config /opt/agent/runtime/network_policy.json" \
+     -e CODEX_CLI_COMMAND="codex run --config /opt/agent/runtime/network_policy.json" \
      ai-agent-toolkit:latest
    ```
 
@@ -120,7 +120,7 @@ The agent will start automatically and use your API key.
 4. Log in with your browser:
 
    ```bash
-   codex-cli auth login
+   codex auth login
    ```
 
    - You’ll see a short code and a URL.
@@ -148,7 +148,7 @@ Once authenticated (via API key or browser login):
 2. Run a test command:
 
    ```bash
-   codex-cli status
+   codex status
    ```
 
 If it prints a valid response, you’re ready to go!
