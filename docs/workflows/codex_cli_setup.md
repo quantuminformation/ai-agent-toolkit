@@ -2,8 +2,11 @@
 
 > **Note:** This guide describes a Docker-based setup for the `codex` CLI, specific to this `ai-agent-toolkit` project. For information on installing and running the `codex` CLI directly on your machine, please refer to the [official documentation](https://github.com/openai/codex).
 
-This guide explains how to prepare the Docker image and start the Codex CLI agent with the configuration system in this repository.  
+This guide explains how to prepare the Docker image and start the Codex CLI agent with the configuration system in this repository.
 It is written for **beginners** — even if you are new to Docker or not very technical, you can follow along step by step.
+
+> **If you hit an error:** copy the exact command you ran and its full output.
+> Sharing both together makes it much easier to diagnose issues.
 
 ---
 
@@ -79,13 +82,16 @@ This is where you choose **Option A (API key)** or **Option B (browser login)**.
 2. Run:
 
    ```bash
-   docker run --rm \
+   docker run --rm --name codex-agent \
      -v "$PWD/config:/opt/agent/config" \
      -v "$PWD/workspaces:/workspaces" \
      -e OPENAI_API_KEY="sk-your-api-key" \
      -e CODEX_CLI_COMMAND="codex run" \
      ai-agent-toolkit:latest
    ```
+
+   > If you already have a container called `codex-agent`, stop and remove it
+   > first with `docker rm -f codex-agent`.
 
 The agent will start automatically and use your API key. The container entrypoint
 applies the network policy declared in `config/agent_config.json`, so no extra
@@ -103,7 +109,7 @@ Codex CLI behaviour.
    in an idle state so you can exec into it afterward:
 
    ```bash
-   docker run -d \
+   docker run -d --name codex-agent \
      -v "$PWD/config:/opt/agent/config" \
      -v "$PWD/workspaces:/workspaces" \
      -e CODEX_CLI_COMMAND="" \
@@ -117,19 +123,13 @@ Codex CLI behaviour.
    > entrypoint; customize `CODEX_CLI_COMMAND` only if you need additional Codex
    > CLI overrides.
 
-2. Find the container ID:
+2. Open a shell inside the container by referring to the name you just set:
 
    ```bash
-   docker ps
+   docker exec -it codex-agent /bin/bash
    ```
 
-3. Open a shell inside the container:
-
-   ```bash
-   docker exec -it <container_id> /bin/bash
-   ```
-
-4. Log in with your browser:
+3. Log in with your browser:
 
    ```bash
    codex auth login
@@ -139,26 +139,27 @@ Codex CLI behaviour.
    - Open the URL on your host machine, sign in to OpenAI, and paste the code.
    - Once confirmed, the CLI is authenticated.
 
-5. (Optional) To make login persist across runs, add this volume mount:
+4. (Optional) To make login persist across runs, add this volume mount:
 
    ```bash
    -v "$PWD/.codex:/root/.config/codex"
    ```
 
-6. Start the Codex agent once login succeeds. Because you left
+5. Start the Codex agent once login succeeds. Because you left
    `CODEX_CLI_COMMAND` empty when the container booted, launch the CLI manually:
 
    ```bash
-   docker exec -it <container_id> codex run
+   docker exec -it codex-agent codex run
    ```
 
-   > Alternatively, stop the temporary container (`docker stop <container_id>`) and
+   > Alternatively, stop the temporary container (`docker stop codex-agent && docker rm codex-agent`) and
    > restart it with `-e CODEX_CLI_COMMAND="codex run"` now that your login is cached.
 
-7. When you are done with the idle container, stop it to clean up resources:
+6. When you are done with the idle container, stop it to clean up resources:
 
    ```bash
-   docker stop <container_id>
+   docker stop codex-agent
+   docker rm codex-agent
    ```
 
 ---
@@ -170,7 +171,7 @@ Once authenticated (via API key or browser login):
 1. Attach to the container shell if you’re not already inside:
 
    ```bash
-   docker exec -it <container_id> /bin/bash
+   docker exec -it codex-agent /bin/bash
    ```
 
 2. Run a test command:
