@@ -172,8 +172,10 @@ Codex CLI behaviour.
    > `docker exec -it $(docker container inspect --format '{{.Id}}' codex-agent) /bin/bash` —
    > but using the container name is usually simpler.
 
-3. Log in with your browser. The CLI already binds to all interfaces, so you
-   only need to pin the port to `1455` to match the publish rule above:
+3. Log in with your browser. The CLI listens on the container side of port
+   `1455`, so just make sure you publish the same port when you run Docker.
+   If your CLI version supports `--port`, pass it explicitly to avoid the
+   callback using a different value:
 
    ```bash
    codex auth login --port 1455
@@ -195,10 +197,14 @@ Codex CLI behaviour.
 
 5. Start the Codex agent once login succeeds. Because you left
    `CODEX_CLI_COMMAND` empty when the container booted, launch the CLI manually
-   (the login flags are not needed anymore):
+   (the login flags are not needed anymore). The command below uses the
+   container name, and the second example shows how to resolve the full ID
+   automatically:
 
    ```bash
    docker exec -it codex-agent codex run
+   # or
+   docker exec -it $(docker container inspect --format '{{.Id}}' codex-agent) codex run
    ```
 
    > Alternatively, stop the temporary container (`docker stop codex-agent && docker rm codex-agent`) and
