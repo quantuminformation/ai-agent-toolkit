@@ -97,13 +97,15 @@ Codex CLI behaviour.
 
 ### 🌐 Option B — Browser login (if you don’t have an API key)
 
-1. Start the container **without** the API key:
+1. Start the container **without** the API key and leave `CODEX_CLI_COMMAND`
+   blank so the entrypoint does not try to run the Codex CLI before you finish
+   logging in:
 
    ```bash
    docker run -d \
      -v "$PWD/config:/opt/agent/config" \
      -v "$PWD/workspaces:/workspaces" \
-     -e CODEX_CLI_COMMAND="codex run" \
+     -e CODEX_CLI_COMMAND="" \
      ai-agent-toolkit:latest
    ```
 
@@ -141,6 +143,16 @@ Codex CLI behaviour.
    -v "$PWD/.codex:/root/.config/codex"
    ```
 
+6. Start the Codex agent once login succeeds. Because you left
+   `CODEX_CLI_COMMAND` empty when the container booted, launch the CLI manually:
+
+   ```bash
+   docker exec -it <container_id> codex run
+   ```
+
+   > Alternatively, stop the temporary container (`docker stop <container_id>`) and
+   > restart it with `-e CODEX_CLI_COMMAND="codex run"` now that your login is cached.
+
 ---
 
 ## 5. Verify Codex CLI connectivity
@@ -163,7 +175,33 @@ If it prints a valid response, you’re ready to go!
 
 ---
 
-## 6. Updating the configuration
+## 6. Iterating on agent code without rebuilding the image
+
+When you edit JavaScript in `scripts/` or tweak shell helpers, you do **not**
+need to rebuild the Docker image. Bind-mount the source directories into the
+container so it always runs your local files:
+
+```bash
+docker run --rm \
+  -v "$PWD/config:/opt/agent/config" \
+  -v "$PWD/scripts:/opt/agent/scripts" \
+  -v "$PWD/docker/entrypoint.sh:/entrypoint.sh" \
+  -v "$PWD/workspaces:/workspaces" \
+  -e OPENAI_API_KEY="sk-your-api-key" \
+  -e CODEX_CLI_COMMAND="codex run" \
+  ai-agent-toolkit:latest
+```
+
+- Changes you make locally are reflected the next time the CLI runs.
+- Rebuild the image only when you modify dependencies in the Dockerfile itself
+  (for example, adding new apt or npm packages).
+
+You can apply the same volume mounts to the browser-login flow by adding the
+`-v` lines from above to the Option B command.
+
+---
+
+## 7. Updating the configuration
 
 - Any changes to `agent_config.json` take effect the next time you start the container.
 - To test different access levels, edit `internet_access.mode` and toggle `allow_unrestricted_mode`.
