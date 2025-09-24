@@ -5,6 +5,27 @@
 This guide explains how to prepare the Docker image and start the Codex CLI agent with the configuration system in this repository.
 It is written for **beginners** — even if you are new to Docker or not very technical, you can follow along step by step.
 
+---
+
+## Why this workflow exists
+
+Running the agent inside Docker keeps it isolated from your host machine. Even
+when you grant the model unrestricted internet access (for example to let it
+research libraries), the container boundary keeps prompt-injection payloads from
+touching your local files or secrets—only the bind-mounted workspace is
+visible. To stay safe:
+
+- Create a dedicated `workspaces/` directory for the repos the agent should
+  modify. Do **not** mount your entire home folder.
+- Leave the default network policy (`internet_access.mode: "codex_common"`)
+  unless you explicitly need full internet access.
+- If you do enable unrestricted access, set `allow_unrestricted_mode` to
+  `true` in `agent_config.json` and keep sensitive data outside the bind
+  mounts.
+
+No container setup can make AI agents perfectly safe, but this workflow gives
+you a strong isolation layer while keeping the ergonomics of the Codex CLI.
+
 > **If you hit an error:** copy the exact command you ran and its full output.
 > Sharing both together makes it much easier to diagnose issues.
 
@@ -49,7 +70,10 @@ It is written for **beginners** — even if you are new to Docker or not very te
    - Set `internet_access.mode`:
       - `"offline"` → no internet access.
       - `"codex_common"` → access to a safe allowlist (recommended).
-      - `"unrestricted"` → full internet access (**not recommended** unless you know the risks).
+      - `"unrestricted"` → full internet access (use only when you understand the risks).
+   - Leave `allow_unrestricted_mode` as `false` unless you truly need the
+     agent online without restrictions. If you flip it to `true`, double-check
+     that the container is the only place the agent can reach your files.
 
 ---
 
@@ -90,6 +114,10 @@ This is where you choose **Option A (API key)** or **Option B (browser login)**.
      ai-agent-toolkit:latest
    ```
 
+   > The agent now runs entirely inside Docker. Prompt-injection payloads cannot
+   > escape the container unless you mount additional host folders, so keep the
+   > bind mounts limited to the project workspace.
+
    > If you already have a container called `codex-agent`, stop and remove it
    > first with `docker rm -f codex-agent`.
 
@@ -128,7 +156,8 @@ Codex CLI behaviour.
 
    > Network restrictions from `agent_config.json` are still enforced by the
    > entrypoint; customize `CODEX_CLI_COMMAND` only if you need additional Codex
-   > CLI overrides.
+   > CLI overrides. As with Option A, keep the mounted paths narrow so the agent
+   > only sees what it needs to modify.
 
 2. Open a shell inside the container by referring to the name you just set:
 
