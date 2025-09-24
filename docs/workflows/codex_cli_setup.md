@@ -172,19 +172,20 @@ Codex CLI behaviour.
    > `docker exec -it $(docker container inspect --format '{{.Id}}' codex-agent) /bin/bash` —
    > but using the container name is usually simpler.
 
-3. Log in with your browser. Bind the login server to `0.0.0.0` (so Docker can
-   forward traffic from your host) and pin the port to `1455` to match the
-   publish rule above:
+3. Log in with your browser. The CLI already binds to all interfaces, so you
+   only need to pin the port to `1455` to match the publish rule above:
 
    ```bash
-   codex auth login --bind 0.0.0.0 --port 1455
+   codex auth login --port 1455
    ```
 
    - You’ll see a short code and a URL.
    - Open the URL on your host machine, sign in to OpenAI, and paste the code.
    - Once confirmed, the CLI is authenticated. If the browser callback hangs,
      double-check that the container is still running and that port `1455` is
-     exposed on your `docker run` command.
+     exposed on your `docker run` command. Some CLI releases do not support
+     `--port`; in that case simply run `codex auth login` and use the port that
+     the CLI prints (publish the same port when you start Docker).
 
 4. (Optional) To make login persist across runs, add this volume mount:
 
