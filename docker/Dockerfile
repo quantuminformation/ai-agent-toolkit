@@ -6,7 +6,7 @@ ENV AGENT_HOME=/opt/agent \
 WORKDIR ${AGENT_HOME}
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git ca-certificates curl \
+    && apt-get install -y --no-install-recommends git ca-certificates curl bash \
     && rm -rf /var/lib/apt/lists/*
 
 COPY scripts ${AGENT_HOME}/scripts
