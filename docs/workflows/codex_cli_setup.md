@@ -2,8 +2,32 @@
 
 > **Note:** This guide describes a Docker-based setup for the `codex` CLI, specific to this `ai-agent-toolkit` project. For information on installing and running the `codex` CLI directly on your machine, please refer to the [official documentation](https://github.com/openai/codex).
 
-This guide explains how to prepare the Docker image and start the Codex CLI agent with the configuration system in this repository.  
+This guide explains how to prepare the Docker image and start the Codex CLI agent with the configuration system in this repository.
 It is written for **beginners** — even if you are new to Docker or not very technical, you can follow along step by step.
+
+---
+
+## Why this workflow exists
+
+Running the agent inside Docker keeps it isolated from your host machine. Even
+when you grant the model unrestricted internet access (for example to let it
+research libraries), the container boundary keeps prompt-injection payloads from
+touching your local files or secrets—only the bind-mounted workspace is
+visible. To stay safe:
+
+- Create a dedicated `workspaces/` directory for the repos the agent should
+  modify. Do **not** mount your entire home folder.
+- Leave the default network policy (`internet_access.mode: "codex_common"`)
+  unless you explicitly need full internet access.
+- If you do enable unrestricted access, set `allow_unrestricted_mode` to
+  `true` in `agent_config.json` and keep sensitive data outside the bind
+  mounts.
+
+No container setup can make AI agents perfectly safe, but this workflow gives
+you a strong isolation layer while keeping the ergonomics of the Codex CLI.
+
+> **If you hit an error:** copy the exact command you ran and its full output.
+> Sharing both together makes it much easier to diagnose issues.
 
 ---
 
@@ -46,7 +70,10 @@ It is written for **beginners** — even if you are new to Docker or not very te
    - Set `internet_access.mode`:
       - `"offline"` → no internet access.
       - `"codex_common"` → access to a safe allowlist (recommended).
-      - `"unrestricted"` → full internet access (**not recommended** unless you know the risks).
+      - `"unrestricted"` → full internet access (use only when you understand the risks).
+   - Leave `allow_unrestricted_mode` as `false` unless you truly need the
+     agent online without restrictions. If you flip it to `true`, double-check
+     that the container is the only place the agent can reach your files.
 
 ---
 
@@ -79,58 +106,115 @@ This is where you choose **Option A (API key)** or **Option B (browser login)**.
 2. Run:
 
    ```bash
-   docker run --rm \
+   docker run --rm --name codex-agent \
      -v "$PWD/config:/opt/agent/config" \
      -v "$PWD/workspaces:/workspaces" \
      -e OPENAI_API_KEY="sk-your-api-key" \
-     -e CODEX_CLI_COMMAND="codex run --config /opt/agent/runtime/network_policy.json" \
+     -e CODEX_CLI_COMMAND="codex run" \
      ai-agent-toolkit:latest
    ```
 
-The agent will start automatically and use your API key.
+   > The agent now runs entirely inside Docker. Prompt-injection payloads cannot
+   > escape the container unless you mount additional host folders, so keep the
+   > bind mounts limited to the project workspace.
+
+   > If you already have a container called `codex-agent`, stop and remove it
+   > first with `docker rm -f codex-agent`.
+
+The agent will start automatically and use your API key. The container entrypoint
+applies the network policy declared in `config/agent_config.json`, so no extra
+flags are required when launching `codex run`. Advanced users can still add
+`--config key=value` overrides to `CODEX_CLI_COMMAND` if they need to tweak
+Codex CLI behaviour.
 
 ---
 
 ### 🌐 Option B — Browser login (if you don’t have an API key)
 
-1. Start the container **without** the API key:
+1. Start the container **without** the API key and leave `CODEX_CLI_COMMAND`
+   blank so the entrypoint does not try to run the Codex CLI before you finish
+   logging in. Publish port `1455` so your host browser can reach the callback
+   endpoint that the CLI spins up during authentication. When
+   `CODEX_CLI_COMMAND` is empty the container now stays alive in an idle state
+   so you can exec into it afterward:
 
    ```bash
-   docker run -d \
+   docker run -d --name codex-agent \
+     -p 1455:1455 \
      -v "$PWD/config:/opt/agent/config" \
      -v "$PWD/workspaces:/workspaces" \
-     -e CODEX_CLI_COMMAND="codex run --config /opt/agent/runtime/network_policy.json" \
+     -e CODEX_CLI_COMMAND="" \
      ai-agent-toolkit:latest
-   ```
+  ```
 
-   > The `-d` flag keeps the container running in the background.
+   > The `-d` flag keeps the container running in the background, and the
+   > entrypoint will idle instead of exiting so you can authenticate.
 
-2. Find the container ID:
+   > The Docker image exposes port `1455` by default; publishing it with
+   > `-p 1455:1455` forwards the browser callback traffic from your host into the
+   > container so the CLI can finish the OAuth flow.
 
-   ```bash
-   docker ps
-   ```
+   > Network restrictions from `agent_config.json` are still enforced by the
+   > entrypoint; customize `CODEX_CLI_COMMAND` only if you need additional Codex
+   > CLI overrides. As with Option A, keep the mounted paths narrow so the agent
+   > only sees what it needs to modify.
 
-3. Open a shell inside the container:
-
-   ```bash
-   docker exec -it <container_id> /bin/bash
-   ```
-
-4. Log in with your browser:
+2. Open a shell inside the container by referring to the name you just set:
 
    ```bash
-   codex auth login
+   docker exec -it codex-agent /bin/bash
+   ```
+
+   > **Need the full container ID for another command?** Run
+   > `docker container inspect --format '{{.Id}}' codex-agent` to print it
+   > directly without scanning the `docker ps` table. You can also embed that in
+   > another command — for example,
+   > `docker exec -it $(docker container inspect --format '{{.Id}}' codex-agent) /bin/bash` —
+   > but using the container name is usually simpler.
+
+3. Log in with your browser. The CLI listens on the container side of port
+   `1455`, so just make sure you publish the same port when you run Docker.
+   If your CLI version supports `--port`, pass it explicitly to avoid the
+   callback using a different value:
+
+   ```bash
+   codex auth login --port 1455
    ```
 
    - You’ll see a short code and a URL.
    - Open the URL on your host machine, sign in to OpenAI, and paste the code.
-   - Once confirmed, the CLI is authenticated.
+   - Once confirmed, the CLI is authenticated. If the browser callback hangs,
+     double-check that the container is still running and that port `1455` is
+     exposed on your `docker run` command. Some CLI releases do not support
+     `--port`; in that case simply run `codex auth login` and use the port that
+     the CLI prints (publish the same port when you start Docker).
 
-5. (Optional) To make login persist across runs, add this volume mount:
+4. (Optional) To make login persist across runs, add this volume mount:
 
    ```bash
    -v "$PWD/.codex:/root/.config/codex"
+   ```
+
+5. Start the Codex agent once login succeeds. Because you left
+   `CODEX_CLI_COMMAND` empty when the container booted, launch the CLI manually
+   (the login flags are not needed anymore). The command below uses the
+   container name, and the second example shows how to resolve the full ID
+   automatically:
+
+   ```bash
+   docker exec -it codex-agent codex run
+   # or
+   docker exec -it $(docker container inspect --format '{{.Id}}' codex-agent) codex run
+   ```
+
+   > Alternatively, stop the temporary container (`docker stop codex-agent && docker rm codex-agent`) and
+   > restart it with `-e CODEX_CLI_COMMAND="codex run"` now that your login is cached.
+
+6. When you are done with the idle container, stop it to clean up resources:
+
+   ```bash
+   docker stop codex-agent
+   docker rm codex-agent
    ```
 
 ---
@@ -142,7 +226,7 @@ Once authenticated (via API key or browser login):
 1. Attach to the container shell if you’re not already inside:
 
    ```bash
-   docker exec -it <container_id> /bin/bash
+   docker exec -it codex-agent /bin/bash
    ```
 
 2. Run a test command:
@@ -155,7 +239,42 @@ If it prints a valid response, you’re ready to go!
 
 ---
 
-## 6. Updating the configuration
+## 6. Iterating on agent code without rebuilding the image
+
+When you edit JavaScript in `scripts/` or tweak shell helpers, you do **not**
+need to rebuild the Docker image. Bind-mount the source directories into the
+container so it always runs your local files:
+
+```bash
+docker run --rm \
+  -v "$PWD/config:/opt/agent/config" \
+  -v "$PWD/scripts:/opt/agent/scripts" \
+  -v "$PWD/docker/entrypoint.sh:/entrypoint.sh" \
+  -v "$PWD/workspaces:/workspaces" \
+  -e OPENAI_API_KEY="sk-your-api-key" \
+  -e CODEX_CLI_COMMAND="codex run" \
+  ai-agent-toolkit:latest
+```
+
+- Changes you make locally are reflected the next time the CLI runs.
+- Rebuild the image only when you modify dependencies in the Dockerfile itself
+  (for example, adding new apt or npm packages).
+
+> **Do I need to rebuild or restart after every change?**
+>
+> - **No rebuild** is required for JS/shell edits that are bind-mounted — just
+>   rerun `codex run` (or restart the container) to pick up the new code.
+> - **Restart the container** if you change `agent_config.json`; the entrypoint
+>   reads it at startup.
+> - **Rebuild the image** only when you touch `docker/Dockerfile` or install new
+>   global dependencies inside the image.
+
+You can apply the same volume mounts to the browser-login flow by adding the
+`-v` lines from above to the Option B command.
+
+---
+
+## 7. Updating the configuration
 
 - Any changes to `agent_config.json` take effect the next time you start the container.
 - To test different access levels, edit `internet_access.mode` and toggle `allow_unrestricted_mode`.

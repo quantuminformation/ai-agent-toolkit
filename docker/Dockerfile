@@ -15,5 +15,6 @@ COPY scripts ${AGENT_HOME}/scripts
 COPY config ${AGENT_HOME}/config
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh ${AGENT_HOME}/scripts/bootstrap_agent.js ${AGENT_HOME}/scripts/seed_data.sh
+EXPOSE 1455
 VOLUME ["/workspaces", "${AGENT_HOME}/config"]
 ENTRYPOINT ["/entrypoint.sh"]
