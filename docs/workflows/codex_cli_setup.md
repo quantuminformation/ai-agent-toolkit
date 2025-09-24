@@ -83,11 +83,15 @@ This is where you choose **Option A (API key)** or **Option B (browser login)**.
      -v "$PWD/config:/opt/agent/config" \
      -v "$PWD/workspaces:/workspaces" \
      -e OPENAI_API_KEY="sk-your-api-key" \
-     -e CODEX_CLI_COMMAND="codex run --config /opt/agent/runtime/network_policy.json" \
+     -e CODEX_CLI_COMMAND="codex run" \
      ai-agent-toolkit:latest
    ```
 
-The agent will start automatically and use your API key.
+The agent will start automatically and use your API key. The container entrypoint
+applies the network policy declared in `config/agent_config.json`, so no extra
+flags are required when launching `codex run`. Advanced users can still add
+`--config key=value` overrides to `CODEX_CLI_COMMAND` if they need to tweak
+Codex CLI behaviour.
 
 ---
 
@@ -99,11 +103,15 @@ The agent will start automatically and use your API key.
    docker run -d \
      -v "$PWD/config:/opt/agent/config" \
      -v "$PWD/workspaces:/workspaces" \
-     -e CODEX_CLI_COMMAND="codex run --config /opt/agent/runtime/network_policy.json" \
+     -e CODEX_CLI_COMMAND="codex run" \
      ai-agent-toolkit:latest
    ```
 
    > The `-d` flag keeps the container running in the background.
+
+   > Network restrictions from `agent_config.json` are still enforced by the
+   > entrypoint; customize `CODEX_CLI_COMMAND` only if you need additional Codex
+   > CLI overrides.
 
 2. Find the container ID:
 
