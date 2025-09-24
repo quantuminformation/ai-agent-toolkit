@@ -1,28 +1,54 @@
-# Codex CLI setup workflow
+# Codex CLI Setup Workflow
 
-This guide explains how to prepare the Docker image and start the Codex CLI agent with the configuration system provided in this repository. The container uses a lightweight Node.js bootstrap script to clone repositories, enforce network policy, and launch the Codex CLI command you supply.
+> **Note:** This guide describes a Docker-based setup for the `codex` CLI, specific to this `ai-agent-toolkit` project. For information on installing and running the `codex` CLI directly on your machine, please refer to the [official documentation](https://github.com/openai/codex).
 
-## 1. Prerequisites
+This guide explains how to prepare the Docker image and start the Codex CLI agent with the configuration system in this repository.  
+It is written for **beginners** — even if you are new to Docker or not very technical, you can follow along step by step.
 
-Before you start, make sure the following items are ready:
+---
 
-1. **Docker installed locally.** Verify with `docker version`; install Docker Desktop or the Linux packages if the command is not found.
-2. **OpenAI credentials** for the Codex CLI. You can either supply an API key (non-interactive) or sign in through the browser-based login flow that the CLI provides. Both options are covered below.
-3. **Access to the spec and source repositories** the agent should work with. Confirm that the URLs are reachable from your machine and that you have credentials if they are private.
+## 1. What you need before starting
 
-## 2. Prepare the configuration
+1. **Docker installed** on your computer.
+   - Run `docker version` in your terminal to check.
+   - If it says “command not found,” install [Docker Desktop](https://docs.docker.com/get-docker/).
 
-1. Copy the example configuration and edit it to match your environment.
+2. **An OpenAI account.**
+   - There are **two types of OpenAI access**:
+      - **ChatGPT Plus** → lets you use GPT-4 in the ChatGPT app.
+      - **OpenAI API access** → gives you an API key (`sk-...`) that works with the Codex CLI.
+   - ⚠️ Having ChatGPT Plus does *not* automatically give you API access.
+   - To check: log in at [platform.openai.com](https://platform.openai.com/).
+      - If you can create an API key under **View API Keys**, you can use **Option A** below.
+      - If you cannot, you must use **Option B (browser login)**.
+
+3. **Access to the repos** the agent should work with.
+   - In your config you’ll set the URLs and branches of the `specs` and `source` repositories.
+   - Make sure you can open these URLs in a browser and that you have the right permissions (for private repos you’ll need GitHub/SSH credentials).
+
+---
+
+## 2. Configure the agent
+
+1. Copy the example config:
    ```bash
    cp config/agent_config.example.json config/agent_config.json
-   $EDITOR config/agent_config.json
    ```
-2. Update the spec and source repository URLs, branches, and clone paths.
-3. Choose the desired `internet_access.mode`:
-   * `offline` – Blocks all outbound connectivity for the agent.
-   * `codex_common` – Restricts egress to the curated allowlist defined in `internet_access.allowed_sites`.
-   * `unrestricted` – Allows full internet access **only** when `allow_unrestricted_mode` is set to `true`.
-4. Leave `allow_unrestricted_mode` set to `false` unless the environment has been assessed and the agent should operate without restrictions.
+
+2. Edit it with your editor:
+   ```bash
+   nano config/agent_config.json
+   ```
+   *(Replace `nano` with `vim`, `code`, or `wstorm` if you prefer.)*
+
+3. Inside `agent_config.json`:
+   - Update repo URLs and branches.
+   - Set `internet_access.mode`:
+      - `"offline"` → no internet access.
+      - `"codex_common"` → access to a safe allowlist (recommended).
+      - `"unrestricted"` → full internet access (**not recommended** unless you know the risks).
+
+---
 
 ## 3. Build the Docker image
 
@@ -30,64 +56,45 @@ Before you start, make sure the following items are ready:
 docker build -t ai-agent-toolkit:latest -f docker/Dockerfile .
 ```
 
-## 4. Start the container
+---
 
-Create a directory to host your repositories and mount it into the container:
+## 4. Run the container
+
+Create a workspace folder (this is where your repos and generated data will live):
 
 ```bash
 mkdir -p workspaces
 ```
 
-The entrypoint performs the following tasks:
+Now run the container.  
+This is where you choose **Option A (API key)** or **Option B (browser login)**.
 
-1. Reads `/opt/agent/config/agent_config.json` (or falls back to the example file if it is missing).
-2. Clones or updates the spec and source repositories under `/workspaces`.
-3. Exports environment variables that convey the effective network policy.
-4. Executes the seed data script, if configured.
-5. Starts the Codex CLI command defined by `CODEX_CLI_COMMAND`.
+---
 
-You can authenticate the CLI in two different ways depending on your organization’s policies and preference.
+### 🔑 Option A — API key login (recommended if you have API access)
 
-### Option A: Provide an OpenAI API key (non-interactive)
+1. Get your API key from [platform.openai.com](https://platform.openai.com/account/api-keys).  
+   It will look like `sk-...`.
 
-Supply the key through an environment variable when you launch the container. Replace `sk-...` with your actual key. The quotes keep special characters in the key from being interpreted by the shell.
+2. Run:
 
-```bash
-docker run --rm \
-  -v "$PWD/config:/opt/agent/config" \
-  -v "$PWD/workspaces:/workspaces" \
-  -e OPENAI_API_KEY="sk-..." \
-  -e CODEX_CLI_COMMAND="codex-cli run --config /opt/agent/runtime/network_policy.json" \
-  ai-agent-toolkit:latest
-```
+   ```bash
+   docker run --rm \
+     -v "$PWD/config:/opt/agent/config" \
+     -v "$PWD/workspaces:/workspaces" \
+     -e OPENAI_API_KEY="sk-your-api-key" \
+     -e CODEX_CLI_COMMAND="codex-cli run --config /opt/agent/runtime/network_policy.json" \
+     ai-agent-toolkit:latest
+   ```
 
-The bootstrap exports the variable so that any subsequent CLI invocation—automatic or manual—can read it.
+The agent will start automatically and use your API key.
 
-### Option B: Use the Codex CLI browser login
+---
 
-If you prefer the device-code/browser login flow, start the container without the `OPENAI_API_KEY` variable:
+### 🌐 Option B — Browser login (if you don’t have an API key)
 
-```bash
-docker run --rm \
-  -v "$PWD/config:/opt/agent/config" \
-  -v "$PWD/workspaces:/workspaces" \
-  -e CODEX_CLI_COMMAND="codex-cli run --config /opt/agent/runtime/network_policy.json" \
-  ai-agent-toolkit:latest
-```
+1. Start the container **without** the API key:
 
-Once the bootstrap has finished cloning the repositories, open a shell in the running container (see [“Logging in” to the container](#5-logging-in-to-the-container-for-interactive-access)) and run:
-
-```bash
-codex-cli auth login
-```
-
-The CLI prints a short verification code and a URL. Open the URL in a browser on your host machine, sign in to OpenAI if prompted, and enter the code. After the CLI confirms the login, you can start the Codex workflow manually (`codex-cli run ...`) or let the process that the entrypoint launched retry and proceed. Credentials are stored inside the container at `~/.config/codex`. Mount that directory to the host (for example, add `-v "$PWD/.codex:/root/.config/codex"` to the `docker run` command) if you want the login to persist across container restarts.
-
-## 5. “Logging in” to the container for interactive access
-
-Sometimes you will want to inspect the cloned repositories or run a Codex CLI command manually. Follow these steps:
-
-1. Start the container in the background so it keeps running after you close the terminal. Add the `-d` flag to the previous `docker run` command and remove `--rm` if you want the container to stick around after it stops:
    ```bash
    docker run -d \
      -v "$PWD/config:/opt/agent/config" \
@@ -95,41 +102,61 @@ Sometimes you will want to inspect the cloned repositories or run a Codex CLI co
      -e CODEX_CLI_COMMAND="codex-cli run --config /opt/agent/runtime/network_policy.json" \
      ai-agent-toolkit:latest
    ```
-   Add `-e OPENAI_API_KEY="sk-..."` if you are using the API key workflow. If you are using the browser login flow, omit that environment variable and add the optional volume mount for `~/.config/codex` if you want credentials to persist.
-2. List containers to find the ID:
+
+   > The `-d` flag keeps the container running in the background.
+
+2. Find the container ID:
+
    ```bash
    docker ps
    ```
-3. Open an interactive shell inside the running container:
+
+3. Open a shell inside the container:
+
    ```bash
    docker exec -it <container_id> /bin/bash
    ```
-4. Once inside, you will find:
-   * Configuration under `/opt/agent` (including `agent_config.json`).
-   * Cloned repositories in `/workspaces/<configured_path>`.
-   * The `OPENAI_API_KEY` environment variable already exported (`echo $OPENAI_API_KEY`) when you provided it at container launch.
 
-Exit the shell with `exit` when you are done. The container keeps running until you stop it with `docker stop <container_id>`.
+4. Log in with your browser:
 
-## 6. Verify Codex CLI connectivity
+   ```bash
+   codex-cli auth login
+   ```
 
-With the container running (either through the standard or detached command), you can confirm that the Codex CLI can reach OpenAI:
+   - You’ll see a short code and a URL.
+   - Open the URL on your host machine, sign in to OpenAI, and paste the code.
+   - Once confirmed, the CLI is authenticated.
 
-1. Attach to the container shell using `docker exec -it <container_id> /bin/bash` if you are not already inside.
-2. If you supplied an API key, confirm it is present: `echo $OPENAI_API_KEY`. If you used the browser login flow, you can check that credentials were stored by looking for files under `~/.config/codex`.
-3. Run a simple Codex CLI command, for example:
+5. (Optional) To make login persist across runs, add this volume mount:
+
+   ```bash
+   -v "$PWD/.codex:/root/.config/codex"
+   ```
+
+---
+
+## 5. Verify Codex CLI connectivity
+
+Once authenticated (via API key or browser login):
+
+1. Attach to the container shell if you’re not already inside:
+
+   ```bash
+   docker exec -it <container_id> /bin/bash
+   ```
+
+2. Run a test command:
+
    ```bash
    codex-cli status
    ```
-   Replace `status` with the command relevant to your workflow. A successful response indicates that the CLI is authenticated and can reach OpenAI.
 
-If authentication fails, double-check the `OPENAI_API_KEY` value (Option A) or re-run `codex-cli auth login` to refresh the browser flow (Option B). Ensure that your network policy allows access to the OpenAI endpoints.
+If it prints a valid response, you’re ready to go!
 
-## 7. Enforcing network policies
+---
 
-The bootstrap script writes the effective policy to `/opt/agent/runtime/network_policy.json`. This file can be consumed by network tooling or wrapper scripts to configure firewall rules or HTTP proxies. A simple pattern is to pair the container with a sidecar that reads the JSON and programs `iptables` accordingly.
+## 6. Updating the configuration
 
-## 8. Updating the configuration
-
-Changes to `agent_config.json` take effect the next time the container starts. To test different access levels, edit `internet_access.mode` and toggle `allow_unrestricted_mode` as needed. The script always checks the flag before enabling unrestricted access.
-
+- Any changes to `agent_config.json` take effect the next time you start the container.
+- To test different access levels, edit `internet_access.mode` and toggle `allow_unrestricted_mode`.
+- Delete and recreate the container if things look stuck.

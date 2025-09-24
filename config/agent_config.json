@@ -12,7 +12,6 @@
   "internet_access": {
     "mode": "codex_common",
     "allowed_sites": [
-      "https://github.com",
       "https://docs.github.com",
       "https://pypi.org",
       "https://developer.mozilla.org"
