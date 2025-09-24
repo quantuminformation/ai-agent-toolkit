@@ -99,7 +99,8 @@ Codex CLI behaviour.
 
 1. Start the container **without** the API key and leave `CODEX_CLI_COMMAND`
    blank so the entrypoint does not try to run the Codex CLI before you finish
-   logging in:
+   logging in. When `CODEX_CLI_COMMAND` is empty the container now stays alive
+   in an idle state so you can exec into it afterward:
 
    ```bash
    docker run -d \
@@ -109,7 +110,8 @@ Codex CLI behaviour.
      ai-agent-toolkit:latest
    ```
 
-   > The `-d` flag keeps the container running in the background.
+   > The `-d` flag keeps the container running in the background, and the
+   > entrypoint will idle instead of exiting so you can authenticate.
 
    > Network restrictions from `agent_config.json` are still enforced by the
    > entrypoint; customize `CODEX_CLI_COMMAND` only if you need additional Codex
@@ -152,6 +154,12 @@ Codex CLI behaviour.
 
    > Alternatively, stop the temporary container (`docker stop <container_id>`) and
    > restart it with `-e CODEX_CLI_COMMAND="codex run"` now that your login is cached.
+
+7. When you are done with the idle container, stop it to clean up resources:
+
+   ```bash
+   docker stop <container_id>
+   ```
 
 ---
 

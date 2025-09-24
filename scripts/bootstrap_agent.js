@@ -219,7 +219,14 @@ function runSeedDataScript(config) {
 function launchAgent() {
   const command = process.env.CODEX_CLI_COMMAND;
   if (!command) {
-    console.log("CODEX_CLI_COMMAND not set; skipping Codex CLI launch.");
+    console.log(
+        "CODEX_CLI_COMMAND not set; container will remain idle so you can log in via `docker exec`."
+    );
+    try {
+      runInherit("tail", ["-f", "/dev/null"]);
+    } catch (e) {
+      console.warn(`Idle wait exited unexpectedly: ${e.message}`);
+    }
     return;
   }
   const res = spawnSync(command, { stdio: "inherit", shell: true });
