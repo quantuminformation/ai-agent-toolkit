@@ -213,6 +213,15 @@ docker run --rm \
 - Rebuild the image only when you modify dependencies in the Dockerfile itself
   (for example, adding new apt or npm packages).
 
+> **Do I need to rebuild or restart after every change?**
+>
+> - **No rebuild** is required for JS/shell edits that are bind-mounted — just
+>   rerun `codex run` (or restart the container) to pick up the new code.
+> - **Restart the container** if you change `agent_config.json`; the entrypoint
+>   reads it at startup.
+> - **Rebuild the image** only when you touch `docker/Dockerfile` or install new
+>   global dependencies inside the image.
+
 You can apply the same volume mounts to the browser-login flow by adding the
 `-v` lines from above to the Option B command.
 
