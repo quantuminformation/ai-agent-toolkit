@@ -105,11 +105,14 @@ Codex CLI behaviour.
 
 1. Start the container **without** the API key and leave `CODEX_CLI_COMMAND`
    blank so the entrypoint does not try to run the Codex CLI before you finish
-   logging in. When `CODEX_CLI_COMMAND` is empty the container now stays alive
-   in an idle state so you can exec into it afterward:
+   logging in. Publish port `1455` so your host browser can reach the callback
+   endpoint that the CLI spins up during authentication. When
+   `CODEX_CLI_COMMAND` is empty the container now stays alive in an idle state
+   so you can exec into it afterward:
 
    ```bash
    docker run -d --name codex-agent \
+     -p 1455:1455 \
      -v "$PWD/config:/opt/agent/config" \
      -v "$PWD/workspaces:/workspaces" \
      -e CODEX_CLI_COMMAND="" \
@@ -129,15 +132,19 @@ Codex CLI behaviour.
    docker exec -it codex-agent /bin/bash
    ```
 
-3. Log in with your browser:
+3. Log in with your browser. Bind the login server to `0.0.0.0` (so Docker can
+   forward traffic from your host) and pin the port to `1455` to match the
+   publish rule above:
 
    ```bash
-   codex auth login
+   codex auth login --bind 0.0.0.0 --port 1455
    ```
 
    - You’ll see a short code and a URL.
    - Open the URL on your host machine, sign in to OpenAI, and paste the code.
-   - Once confirmed, the CLI is authenticated.
+   - Once confirmed, the CLI is authenticated. If the browser callback hangs,
+     double-check that the container is still running and that port `1455` is
+     exposed on your `docker run` command.
 
 4. (Optional) To make login persist across runs, add this volume mount:
 
@@ -146,7 +153,8 @@ Codex CLI behaviour.
    ```
 
 5. Start the Codex agent once login succeeds. Because you left
-   `CODEX_CLI_COMMAND` empty when the container booted, launch the CLI manually:
+   `CODEX_CLI_COMMAND` empty when the container booted, launch the CLI manually
+   (the login flags are not needed anymore):
 
    ```bash
    docker exec -it codex-agent codex run
