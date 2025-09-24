@@ -14,147 +14,205 @@ const DEFAULT_CONFIG_PATHS = [
 
 class ConfigurationError extends Error {}
 
+/* ---------------------- utils ---------------------- */
+
+function run(cmd, args, options = {}) {
+  const res = spawnSync(cmd, args, { stdio: "pipe", encoding: "utf8", ...options });
+  if (res.status !== 0) {
+    const msg = [
+      `Command failed: ${cmd} ${args.join(" ")}`,
+      (res.stderr || "").trim() || (res.stdout || "").trim() || "(no output)",
+    ].join("\n");
+    const err = new Error(msg);
+    err.code = res.status;
+    throw err;
+  }
+  return (res.stdout || "").trim();
+}
+
+function runInherit(cmd, args, options = {}) {
+  const res = spawnSync(cmd, args, { stdio: "inherit", ...options });
+  if (res.status !== 0) {
+    throw new Error(`Command failed: ${cmd} ${args.join(" ")}`);
+  }
+}
+
+/* ---------------- configuration -------------------- */
+
 function loadConfiguration() {
   const override = process.env[CONFIG_ENV_VAR];
   const candidates = [];
-  if (override) {
-    candidates.push(override);
-  }
+  if (override) candidates.push(override);
   candidates.push(...DEFAULT_CONFIG_PATHS);
 
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
+  for (const c of candidates) {
+    if (fs.existsSync(c)) {
       try {
-        const raw = fs.readFileSync(candidate, "utf8");
-        return JSON.parse(raw);
-      } catch (error) {
-        throw new ConfigurationError(
-          `Failed to parse configuration at ${candidate}: ${error.message}`
-        );
+        return JSON.parse(fs.readFileSync(c, "utf8"));
+      } catch (e) {
+        throw new ConfigurationError(`Failed to parse configuration at ${c}: ${e.message}`);
       }
     }
   }
-
   throw new ConfigurationError(
-    "Unable to locate agent configuration. Set AGENT_CONFIG_PATH or add config/agent_config.json."
+      "Unable to locate agent configuration. Set AGENT_CONFIG_PATH or add config/agent_config.json."
   );
 }
 
+/* ------------------- git helpers ------------------- */
+
 function resolveRepoPath(name, repoConfig) {
   let repoPath = repoConfig.path || `/workspaces/${name}`;
-  if (!path.isAbsolute(repoPath)) {
-    repoPath = path.join("/workspaces", repoPath);
-  }
+  if (!path.isAbsolute(repoPath)) repoPath = path.join("/workspaces", repoPath);
   return path.resolve(repoPath);
 }
 
-function runCommand(command, args, options = {}) {
-  const result = spawnSync(command, args, { stdio: "inherit", ...options });
-  if (result.status !== 0) {
-    throw new Error(`Command failed: ${command} ${args.join(" ")}`);
+function remoteHasAnyHeads(url) {
+  try {
+    return Boolean(run("git", ["ls-remote", "--heads", url]));
+  } catch {
+    return false;
   }
 }
+
+function remoteBranchExists(url, branch) {
+  if (!branch) return false;
+  try {
+    return Boolean(run("git", ["ls-remote", "--heads", url, branch]));
+  } catch {
+    return false;
+  }
+}
+
+/* ------------------- repo sync --------------------- */
 
 function syncRepository(name, repoConfig) {
   if (!repoConfig || !repoConfig.url) {
-    throw new ConfigurationError(
-      `${name}_repo.url must be provided in agent_config.json`
-    );
+    console.error(`[${name}] Missing ${name}_repo.url in configuration.`);
+    return false;
   }
 
   const repoPath = resolveRepoPath(name, repoConfig);
-  const branch = repoConfig.branch;
   const url = repoConfig.url;
+  const branch = repoConfig.branch || "main"; // single, simple rule
 
   fs.mkdirSync(path.dirname(repoPath), { recursive: true });
 
-  if (fs.existsSync(path.join(repoPath, ".git"))) {
-    console.log(`Updating ${name} repository at ${repoPath}...`);
-    runCommand("git", ["-C", repoPath, "fetch", "origin"]);
-    if (branch) {
-      runCommand("git", ["-C", repoPath, "checkout", branch]);
-    }
-    runCommand("git", ["-C", repoPath, "pull"]);
-  } else {
-    console.log(`Cloning ${name} repository into ${repoPath}...`);
-    const cloneArgs = ["clone", url, repoPath];
-    if (branch) {
-      cloneArgs.splice(2, 0, "--branch", branch);
-    }
-    runCommand("git", cloneArgs);
+  // 1) Remote must have at least one branch
+  if (!remoteHasAnyHeads(url)) {
+    console.error(
+        `\n[${name}] Remote has no branches at ${url}.\n` +
+        `Create the initial branch "${branch}" once, then rerun:\n\n` +
+        `  git init -b ${branch} ${name}-seed && cd ${name}-seed\n` +
+        `  echo "# ${name}" > README.md\n` +
+        `  git add README.md && git commit -m "init ${branch}"\n` +
+        `  git remote add origin ${url}\n` +
+        `  git push -u origin ${branch}\n` +
+        `  cd .. && rm -rf ${name}-seed\n`
+    );
+    return false;
   }
+
+  // 2) The requested branch must exist
+  if (!remoteBranchExists(url, branch)) {
+    console.error(
+        `\n[${name}] Required branch "${branch}" does not exist on ${url}.\n` +
+        `Please create it once (from the remote default or your desired base):\n\n` +
+        `  git clone ${url} tmp && cd tmp\n` +
+        `  # if the repo already has a default branch (e.g. master/trunk):\n` +
+        `  git checkout -b ${branch} <base-branch>\n` +
+        `  git push -u origin ${branch}\n` +
+        `  cd .. && rm -rf tmp\n\n` +
+        `Then rerun the container.`
+    );
+    return false;
+  }
+
+  const isGitDir = fs.existsSync(path.join(repoPath, ".git"));
+
+  if (isGitDir) {
+    console.log(`Updating ${name} repository at ${repoPath}...`);
+    try {
+      runInherit("git", ["-C", repoPath, "remote", "set-url", "origin", url]);
+      runInherit("git", ["-C", repoPath, "fetch", "origin", "--prune"]);
+      // Always check out from remote ref; avoids "pathspec" issues
+      runInherit("git", ["-C", repoPath, "checkout", "-B", branch, `origin/${branch}`]);
+      runInherit("git", ["-C", repoPath, "pull", "--ff-only", "origin", branch]);
+    } catch (e) {
+      console.error(`\n[${name}] Git update failed: ${e.message}\n`);
+      return false;
+    }
+    return true;
+  }
+
+  // Fresh clone
+  console.log(`Cloning ${name} (${branch}) into ${repoPath}...`);
+  try {
+    runInherit("git", ["clone", "--single-branch", "--branch", branch, url, repoPath]);
+  } catch (e) {
+    console.error(`\n[${name}] Git clone failed: ${e.message}\n`);
+    return false;
+  }
+  return true;
 }
+
+/* --------------- network policy & misc ------------- */
 
 function resolveNetworkPolicy(config) {
   const policy = config.internet_access || {};
   const allowUnrestricted = Boolean(config.allow_unrestricted_mode);
-
   const requestedMode = policy.mode || "offline";
-  const allowedSites = Array.isArray(policy.allowed_sites)
-    ? policy.allowed_sites
-    : [];
+  const allowedSites = Array.isArray(policy.allowed_sites) ? policy.allowed_sites : [];
 
-  let effectiveMode = requestedMode;
+  let effective = requestedMode;
   if (requestedMode === "unrestricted" && !allowUnrestricted) {
     console.log(
-      "Unrestricted mode requested but allow_unrestricted_mode is false; falling back to codex_common."
+        "Unrestricted mode requested but allow_unrestricted_mode is false; falling back to codex_common."
     );
-    effectiveMode = "codex_common";
+    effective = "codex_common";
   }
 
-  const supportedModes = new Set(["offline", "codex_common", "unrestricted"]);
-  if (!supportedModes.has(effectiveMode)) {
-    throw new ConfigurationError(
-      `Unsupported internet access mode: ${effectiveMode}`
-    );
+  const supported = new Set(["offline", "codex_common", "unrestricted"]);
+  if (!supported.has(effective)) {
+    throw new ConfigurationError(`Unsupported internet access mode: ${effective}`);
   }
 
-  return { mode: effectiveMode, allowedSites };
+  return { mode: effective, allowedSites };
 }
 
 function applyNetworkPolicy(mode, allowedSites) {
   const runtimeDir = "/opt/agent/runtime";
   fs.mkdirSync(runtimeDir, { recursive: true });
   const policyPath = path.join(runtimeDir, "network_policy.json");
-  fs.writeFileSync(
-    policyPath,
-    JSON.stringify({ mode, allowed_sites: allowedSites }, null, 2),
-    "utf8"
-  );
+  fs.writeFileSync(policyPath, JSON.stringify({ mode, allowed_sites: allowedSites }, null, 2), "utf8");
 
   process.env.AGENT_INTERNET_MODE = mode;
   process.env.AGENT_ALLOWED_SITES = allowedSites.join(",");
-  console.log(
-    `Applied network policy: mode=${mode}, allowed_sites=${JSON.stringify(
-      allowedSites
-    )}`
-  );
+  console.log(`Applied network policy: mode=${mode}, allowed_sites=${JSON.stringify(allowedSites)}`);
 }
 
+/** Minimal, non-fatal seed runner (auto-uses bash if 'pipefail' is present). */
 function runSeedDataScript(config) {
-  const scriptValue =
-    config.environment && config.environment.seed_data_script;
-  if (!scriptValue) {
-    return;
-  }
+  const scriptValue = config.environment && config.environment.seed_data_script;
+  if (!scriptValue) return;
 
-  const resolvedPath = path.isAbsolute(scriptValue)
-    ? scriptValue
-    : path.resolve(scriptValue);
-
-  if (!fs.existsSync(resolvedPath)) {
-    console.warn(`Seed data script configured but not found: ${resolvedPath}`);
+  const resolved = path.isAbsolute(scriptValue) ? scriptValue : path.resolve(scriptValue);
+  if (!fs.existsSync(resolved)) {
+    console.warn(`Seed data script configured but not found: ${resolved}`);
     return;
   }
 
   try {
-    fs.accessSync(resolvedPath, fs.constants.X_OK);
-    runCommand(resolvedPath, [], { shell: false });
-  } catch (error) {
-    console.log(
-      `Seed data script is not executable. Running via shell: ${resolvedPath}`
-    );
-    runCommand("/bin/sh", [resolvedPath]);
+    const content = fs.readFileSync(resolved, "utf8");
+    const firstLine = content.split("\n", 1)[0] || "";
+    const useBash = /^#!.*\b(bash|env\s+bash)\b/.test(firstLine) || /\bset\s+-o\s+pipefail\b/.test(content);
+    if (useBash) {
+      runInherit("/usr/bin/env", ["bash", resolved]);
+    } else {
+      runInherit("/bin/sh", [resolved]);
+    }
+  } catch (e) {
+    console.warn(`Seed data script failed (continuing): ${e.message}`);
   }
 }
 
@@ -164,37 +222,42 @@ function launchAgent() {
     console.log("CODEX_CLI_COMMAND not set; skipping Codex CLI launch.");
     return;
   }
-
-  console.log(`Starting Codex CLI with command: ${command}`);
-  const result = spawnSync(command, {
-    stdio: "inherit",
-    shell: true,
-  });
-  if (result.status !== 0) {
-    throw new Error("Codex CLI command exited with a non-zero status.");
+  const res = spawnSync(command, { stdio: "inherit", shell: true });
+  if (res.status !== 0) {
+    console.warn("Codex CLI exited non-zero (continuing).");
   }
 }
+
+/* ----------------------- main ---------------------- */
 
 function main() {
   let config;
   try {
     config = loadConfiguration();
-  } catch (error) {
-    if (error instanceof ConfigurationError) {
-      console.error(`Configuration error: ${error.message}`);
-      return 1;
+  } catch (e) {
+    if (e instanceof ConfigurationError) {
+      console.error(`Configuration error: ${e.message}`);
+      return 0; // exit cleanly with message
     }
-    throw error;
+    console.error(e.message || String(e));
+    return 0;
   }
 
+  let allReady = true;
   for (const repoName of ["spec", "source"]) {
     const repoKey = `${repoName}_repo`;
     if (!config[repoKey]) {
-      throw new ConfigurationError(
-        `Missing ${repoKey} section in configuration`
-      );
+      console.error(`Missing ${repoKey} section in configuration`);
+      allReady = false;
+      continue;
     }
-    syncRepository(repoName, config[repoKey]);
+    const ok = syncRepository(repoName, config[repoKey]);
+    if (!ok) allReady = false;
+  }
+
+  if (!allReady) {
+    console.log("\nOne or more repositories are not ready. Please follow the instructions above and rerun.\n");
+    return 0; // clean exit, no stacktraces
   }
 
   const { mode, allowedSites } = resolveNetworkPolicy(config);
@@ -205,11 +268,8 @@ function main() {
 }
 
 Promise.resolve()
-  .then(() => main())
-  .then((code) => {
-    process.exitCode = code;
-  })
-  .catch((error) => {
-    console.error(error instanceof Error ? error.message : error);
-    process.exitCode = 1;
-  });
+    .then(() => (process.exitCode = main()))
+    .catch((error) => {
+      console.error(error instanceof Error ? error.message : error);
+      process.exitCode = 0; // still exit cleanly
+    });

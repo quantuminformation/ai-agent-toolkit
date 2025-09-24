@@ -1,5 +1,5 @@
 #!/bin/sh
-set -euo pipefail
+set -eu
 
 echo "Generating non-production seed data..."
 mkdir -p /workspaces/source/tmp
