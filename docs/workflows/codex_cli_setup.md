@@ -117,10 +117,14 @@ Codex CLI behaviour.
      -v "$PWD/workspaces:/workspaces" \
      -e CODEX_CLI_COMMAND="" \
      ai-agent-toolkit:latest
-   ```
+  ```
 
    > The `-d` flag keeps the container running in the background, and the
    > entrypoint will idle instead of exiting so you can authenticate.
+
+   > The Docker image exposes port `1455` by default; publishing it with
+   > `-p 1455:1455` forwards the browser callback traffic from your host into the
+   > container so the CLI can finish the OAuth flow.
 
    > Network restrictions from `agent_config.json` are still enforced by the
    > entrypoint; customize `CODEX_CLI_COMMAND` only if you need additional Codex
