@@ -126,6 +126,58 @@ This is the most direct and automated method. Your API credentials will be cache
 
 The agent will start automatically. For future runs, you can omit the `OPENAI_API_KEY` variable, as your login will be cached in the `.codex` directory.
 
+#### Tip — provide the API key via your shell before Docker (safer and reusable)
+
+Instead of hardcoding the key in the `docker run` line, you can set it in your shell first, then let Docker pass it through. This avoids storing the key in the command history and makes re‑runs simpler.
+
+- Export once for your current terminal session:
+
+  ```bash
+  export OPENAI_API_KEY=sk-...   # Do not include curly braces
+  ```
+
+  Then start the container and pass the variable through:
+
+  ```bash
+  docker run --rm --name codex-agent \
+    -v "$PWD/config:/opt/agent/config" \
+    -v "$PWD/workspaces:/workspaces" \
+    -v "$PWD/.codex:/root/.config/codex" \
+    -e OPENAI_API_KEY \
+    -e CODEX_CLI_COMMAND="codex run" \
+    ai-agent-toolkit:latest
+  ```
+
+- One‑liner with a secret manager (applies only to that command):
+
+  ```bash
+  OPENAI_API_KEY=$(secret_manager --get OPENAI_API_KEY) \
+  docker run --rm --name codex-agent \
+    -v "$PWD/config:/opt/agent/config" \
+    -v "$PWD/workspaces:/workspaces" \
+    -v "$PWD/.codex:/root/.config/codex" \
+    -e OPENAI_API_KEY \
+    -e CODEX_CLI_COMMAND="codex run" \
+    ai-agent-toolkit:latest
+  ```
+
+- No secret manager? Prompt without echoing to the screen:
+
+  ```bash
+  stty -echo; printf "Paste OPENAI_API_KEY: "; read -r OPENAI_API_KEY; stty echo; echo
+  docker run --rm --name codex-agent \
+    -v "$PWD/config:/opt/agent/config" \
+    -v "$PWD/workspaces:/workspaces" \
+    -v "$PWD/.codex:/root/.config/codex" \
+    -e OPENAI_API_KEY \
+    -e CODEX_CLI_COMMAND="codex run" \
+    ai-agent-toolkit:latest
+  ```
+
+Notes:
+- Environment variables are captured at container start. If you change `OPENAI_API_KEY`, restart the container to apply the new value.
+- Don’t wrap keys in curly braces like `{sk-...}` — use the raw `sk-...` string.
+
 ---
 
 ### 🌐 Option B — Browser Login
