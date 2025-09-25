@@ -268,18 +268,30 @@ function launchAgent() {
     return;
   }
   if (!process.env.OPENAI_API_KEY) {
-    console.error("[codex] OPENAI_API_KEY is not set; refusing to run Codex CLI interactively in Docker.");
+    console.error("[codex] OPENAI_API_KEY is not set; refusing to run Codex CLI.");
     return;
   }
-  // your existing normalize (handles --config -> -c flags)
-  // const normalized = normalizeCodexCommand(raw);
-  const cmd = wrapWithPtyIfNeeded(raw);
+  // Decide interactivity: default to interactive when attached to a TTY,
+  // or when explicitly requested via CODEX_INTERACTIVE=1. Disable when CODEX_INTERACTIVE=0.
+  const envFlag = process.env.CODEX_INTERACTIVE;
+  const interactive = envFlag ? envFlag !== "0" : Boolean(process.stdout.isTTY);
 
-  console.log(`[codex] Running: ${cmd}`);
-  const res = spawnSync(cmd, {
+  if (!interactive) {
+    console.log("[codex] No TTY detected (or CODEX_INTERACTIVE=0). Skipping interactive CLI launch.");
+    console.log("        Re-run the container with -it, or exec into it and run `codex run` manually.");
+    return;
+  }
+
+  const env = { ...process.env };
+  // Ensure interactive UX: unset CI/quiet flags if present.
+  delete env.CI;
+  delete env.CODEX_QUIET_MODE;
+
+  console.log(`[codex] Running (interactive): ${raw}`);
+  const res = spawnSync(raw, {
     stdio: "inherit",
     shell: true,
-    env: { ...process.env, CI: process.env.CI || "1", CODEX_QUIET_MODE: "1" }, // nudge non-interactive mode and suppress UI
+    env,
   });
   if (res.status !== 0) {
     console.warn("Codex CLI exited non-zero (continuing).");

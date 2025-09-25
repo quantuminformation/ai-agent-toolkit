@@ -51,6 +51,21 @@ The entrypoint invokes `scripts/bootstrap_agent.js` which performs the following
 3. Applies the network policy by exporting environment variables the Codex CLI can read.
 4. Launches the Codex CLI agent in restricted or unrestricted mode as dictated by the configuration.
 
+## Quick start (one command)
+
+- Export your API key once in your shell, then run the helper script (allocates a TTY and mounts everything for you):
+
+```
+export OPENAI_API_KEY="{{OPENAI_API_KEY}}"   # set in your shell; do not paste in commands
+scripts/run_agent.sh
+```
+
+- To persist the CLI policy file as a cache on your host (optional):
+
+```
+PERSIST_POLICY=1 scripts/run_agent.sh
+```
+
 ## Common commands
 
 - Build the image (same as above)
@@ -134,6 +149,9 @@ Add this flag to any docker run to persist the CLI policy to the host (do not ed
 
 ## Troubleshooting
 
+- No -it provided
+  - When the container is started without a TTY, the bootstrap will still sync repos, apply network policy, and seed data, but it will intentionally skip launching the interactive CLI. Re-run with -it (or use scripts/run_agent.sh) if you want an interactive Codex session.
+
 - First run on empty remotes
   - If the remote has no branches, bootstrap prints a one-time sequence to initialize the branch (e.g., main) before proceeding.
 
@@ -141,4 +159,13 @@ Add this flag to any docker run to persist the CLI policy to the host (do not ed
   - If you see a message like "Error: The cursor position could not be read within a normal duration", re-run the container with -it so a TTY is allocated (see the interactive command above). Alternatively, run without CODEX_CLI_COMMAND to skip the interactive CLI and perform only sync/policy/seed.
 
 - Missing OPENAI_API_KEY
-  - The CLI will not launch if the variable is unset. Export it in your shell and pass it through as shown above.
+- The CLI will not launch if the variable is unset. Export it in your shell and pass it through as shown above.
+
+## Why this harness instead of just codex-cli settings?
+
+- Reproducibility: The Docker image pins Node, git, and the CLI for identical behavior across machines and CI.
+- Two-repo contract: The harness syncs a spec repo (requirements) and a source repo (outputs) with branch existence checks and friendly guidance for empty remotes.
+- Policy enforcement: offline / allow-list / unrestricted, with explicit allow_unrestricted_mode to prevent accidental full egress.
+- Idempotent bootstrap: optional seed script, clear logs, and safe early exits when preconditions aren’t met.
+- Fewer surprises: Interactive CLI only runs when a TTY is present; otherwise the container prepares everything and exits cleanly.
+- Single source of truth: You edit config/agent_config.json. The CLI policy file is generated and (optionally) persisted as a cache, never hand-edited.
