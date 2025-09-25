@@ -1,0 +1,1 @@
+# This repo holds example specs tha ta client would make so that we can have agents based from https://github.com/quantuminformation/ai-agent-toolkit to run them to build an app

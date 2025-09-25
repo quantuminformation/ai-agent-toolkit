@@ -1,0 +1,6 @@
+{
+  "users": [
+    {"email": "dev@example.com", "role": "developer"},
+    {"email": "pm@example.com", "role": "product_manager"}
+  ]
+}

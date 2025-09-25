@@ -53,5 +53,5 @@ The entrypoint invokes `scripts/bootstrap_agent.js` which performs the following
 
 ## Codex CLI workflow
 
-Detailed setup steps for installing and running the Codex CLI inside the container are documented in [docs/workflows/codex_cli_setup.md](docs/workflows/codex_cli_setup.md).
+Detailed setup steps for installing and running the Codex CLI inside the container are documented in [codex_cli_setup.md](codex_cli_setup.md).
 

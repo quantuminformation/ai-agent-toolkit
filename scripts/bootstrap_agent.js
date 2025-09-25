@@ -128,12 +128,30 @@ function syncRepository(name, repoConfig) {
     return false;
   }
 
-  const isGitDir = fs.existsSync(path.join(repoPath, ".git"));
+  const gitPath = path.join(repoPath, ".git");
+  if (!fs.existsSync(gitPath) && fs.existsSync(repoPath) && fs.readdirSync(repoPath).length > 0) {
+    console.log(`[${name}] Directory exists but is not a git repository. Initializing...`);
+    try {
+      runInherit("git", ["init"], { cwd: repoPath });
+    } catch (e) {
+      console.error(`\n[${name}] Git init failed: ${e.message}\n`);
+      return false;
+    }
+  }
+
+  const isGitDir = fs.existsSync(gitPath);
 
   if (isGitDir) {
     console.log(`Updating ${name} repository at ${repoPath}...`);
     try {
-      runInherit("git", ["-C", repoPath, "remote", "set-url", "origin", url]);
+      // Check if remote 'origin' exists
+      const remotes = run("git", ["-C", repoPath, "remote"]);
+      if (remotes.includes("origin")) {
+        runInherit("git", ["-C", repoPath, "remote", "set-url", "origin", url]);
+      } else {
+        runInherit("git", ["-C", repoPath, "remote", "add", "origin", url]);
+      }
+
       runInherit("git", ["-C", repoPath, "fetch", "origin", "--prune"]);
       // Always check out from remote ref; avoids "pathspec" issues
       runInherit("git", ["-C", repoPath, "checkout", "-B", branch, `origin/${branch}`]);
@@ -219,7 +237,14 @@ function runSeedDataScript(config) {
 function launchAgent() {
   const command = process.env.CODEX_CLI_COMMAND;
   if (!command) {
-    console.log("CODEX_CLI_COMMAND not set; skipping Codex CLI launch.");
+    console.log(
+        "CODEX_CLI_COMMAND not set; container will remain idle so you can log in via `docker exec`."
+    );
+    try {
+      runInherit("tail", ["-f", "/dev/null"]);
+    } catch (e) {
+      console.warn(`Idle wait exited unexpectedly: ${e.message}`);
+    }
     return;
   }
   const res = spawnSync(command, { stdio: "inherit", shell: true });
