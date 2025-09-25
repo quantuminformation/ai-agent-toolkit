@@ -51,7 +51,94 @@ The entrypoint invokes `scripts/bootstrap_agent.js` which performs the following
 3. Applies the network policy by exporting environment variables the Codex CLI can read.
 4. Launches the Codex CLI agent in restricted or unrestricted mode as dictated by the configuration.
 
-## Codex CLI workflow
+## Common commands
 
-Detailed setup steps for installing and running the Codex CLI inside the container are documented in [codex_cli_setup.md](codex_cli_setup.md).
+- Build the image (same as above)
 
+```
+docker build -t ai-agent-toolkit:latest -f docker/Dockerfile .
+```
+
+- Sync/policy only (no interactive CLI launch)
+
+```
+docker run --rm \
+  -v "$PWD/config:/opt/agent/config" \
+  -v "$PWD/workspaces:/workspaces" \
+  ai-agent-toolkit:latest
+```
+
+- Interactive Codex CLI
+  - Ensure OPENAI_API_KEY is already set in your shell; do not paste secrets inline.
+  - Allocate a TTY with -it to avoid interactive UI issues.
+
+```
+docker run --rm -it \
+  -v "$PWD/config:/opt/agent/config" \
+  -v "$PWD/workspaces:/workspaces" \
+  -e OPENAI_API_KEY="$OPENAI_API_KEY" \
+  -e CODEX_CLI_COMMAND="codex run" \
+  ai-agent-toolkit:latest
+```
+
+- Rapid iteration on startup logic (optional)
+  - Mount local scripts instead of rebuilding the image:
+
+```
+docker run --rm -it \
+  -v "$PWD/config:/opt/agent/config" \
+  -v "$PWD/workspaces:/workspaces" \
+  -v "$PWD/scripts:/opt/agent/scripts" \
+  -e OPENAI_API_KEY="$OPENAI_API_KEY" \
+  -e CODEX_CLI_COMMAND="codex run" \
+  ai-agent-toolkit:latest
+```
+
+- Lint/Tests
+  - None are defined in this repository. The primary "build" is the Docker image above.
+
+## High-level architecture
+
+- Entry flow
+  1) The container starts at /entrypoint.sh.
+  2) The entrypoint reads AGENT_CONFIG_PATH (or defaults to /opt/agent/config/agent_config.json, falling back to the example if necessary).
+  3) It invokes scripts/bootstrap_agent.js.
+
+- scripts/bootstrap_agent.js responsibilities
+  - Configuration: Loads agent_config.json from AGENT_CONFIG_PATH or from the local config directory.
+  - Repo sync: For spec_repo and source_repo
+    - Validates the remote has a branch and that the requested branch exists.
+    - Clones the repo to /workspaces/<path> or updates it if already present (resets to the remote branch and fast-forwards).
+    - Provides clear guidance if the remote has no initial branch.
+  - Network policy:
+    - Computes an effective mode: offline | codex_common | unrestricted.
+    - If mode is unrestricted but allow_unrestricted_mode is false, it downgrades to codex_common.
+    - Writes the policy to /root/.config/codex/config.json and exports helper env vars.
+  - Seed data: If environment.seed_data_script is set and present, runs it (bash if appropriate). The default seed script writes /workspaces/source/tmp/seed.json. The entrypoint also attempts to run the same seed script defensively; the operation is idempotent.
+  - Agent launch:
+    - If CODEX_CLI_COMMAND is set and OPENAI_API_KEY is present, it starts the CLI.
+    - If stdout isn’t a TTY, it wraps the command with script -qfec to provide a pseudo-TTY and sets CI=1 and CODEX_QUIET_MODE=1.
+
+- Persistent data layout (host-mounted)
+  - workspaces/specs: clone of the specs repo (see config.spec_repo)
+  - workspaces/source: clone of the source repo (see config.source_repo)
+- /root/.config/codex/config.json (in-container): generated policy the bootstrap writes/updates. Optionally persist to host by adding a .codex bind mount (see below).
+
+### Optional: persist Codex policy across runs
+
+Add this flag to any docker run to persist the CLI policy to the host (do not edit it; it is overwritten each run):
+
+```
+-v "$PWD/.codex:/root/.config/codex"
+```
+
+## Troubleshooting
+
+- First run on empty remotes
+  - If the remote has no branches, bootstrap prints a one-time sequence to initialize the branch (e.g., main) before proceeding.
+
+- Interactive CLI rendering/cursor issues
+  - If you see a message like "Error: The cursor position could not be read within a normal duration", re-run the container with -it so a TTY is allocated (see the interactive command above). Alternatively, run without CODEX_CLI_COMMAND to skip the interactive CLI and perform only sync/policy/seed.
+
+- Missing OPENAI_API_KEY
+  - The CLI will not launch if the variable is unset. Export it in your shell and pass it through as shown above.
