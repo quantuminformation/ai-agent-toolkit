@@ -5,7 +5,7 @@ ENV AGENT_HOME=/opt/agent CODEX_CLI_COMMAND=""
 WORKDIR ${AGENT_HOME}
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends git ca-certificates curl bash \
+ && apt-get install -y --no-install-recommends git ca-certificates curl bash util-linux \
  && rm -rf /var/lib/apt/lists/*
 
 # 👇 Install the CLI so `codex-cli` exists in PATH.

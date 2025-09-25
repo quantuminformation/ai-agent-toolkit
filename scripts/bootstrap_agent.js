@@ -201,7 +201,7 @@ function resolveNetworkPolicy(config) {
 function applyNetworkPolicy(mode, allowedSites) {
   const runtimeDir = "/opt/agent/runtime";
   fs.mkdirSync(runtimeDir, { recursive: true });
-  const policyPath = path.join(runtimeDir, "network_policy.json");
+  const policyPath = path.join("/root/.config/codex", "config.json");
   fs.writeFileSync(policyPath, JSON.stringify({ mode, allowed_sites: allowedSites }, null, 2), "utf8");
 
   process.env.AGENT_INTERNET_MODE = mode;
@@ -234,20 +234,53 @@ function runSeedDataScript(config) {
   }
 }
 
+function hasCommand(bin) {
+  return spawnSync("sh", ["-lc", `command -v ${bin} >/dev/null 2>&1`]).status === 0;
+}
+
+function shellQuote(s) {
+  if (typeof s !== 'string') {
+    s = String(s);
+  }
+  if (!s) {
+    return "''";
+  }
+  if (/["' \t\n\r]/.test(s)) {
+    return "'" + s.replace(/'/g, "'\\''") + "'";
+  }
+  return s;
+}
+
+function wrapWithPtyIfNeeded(cmd) {
+  // If container stdout isn't a TTY, give the CLI a pseudo-TTY
+  if (!process.stdout.isTTY && hasCommand("script")) {
+    return `script -qfec ${shellQuote(cmd)} /dev/null`;
+  }
+  return cmd;
+}
+
 function launchAgent() {
-  const command = process.env.CODEX_CLI_COMMAND;
-  if (!command) {
+  const raw = process.env.CODEX_CLI_COMMAND;
+  if (!raw) {
     console.log(
-        "CODEX_CLI_COMMAND not set; container will remain idle so you can log in via `docker exec`."
+        "CODEX_CLI_COMMAND not set; skipping Codex CLI launch."
     );
-    try {
-      runInherit("tail", ["-f", "/dev/null"]);
-    } catch (e) {
-      console.warn(`Idle wait exited unexpectedly: ${e.message}`);
-    }
     return;
   }
-  const res = spawnSync(command, { stdio: "inherit", shell: true });
+  if (!process.env.OPENAI_API_KEY) {
+    console.error("[codex] OPENAI_API_KEY is not set; refusing to run Codex CLI interactively in Docker.");
+    return;
+  }
+  // your existing normalize (handles --config -> -c flags)
+  // const normalized = normalizeCodexCommand(raw);
+  const cmd = wrapWithPtyIfNeeded(raw);
+
+  console.log(`[codex] Running: ${cmd}`);
+  const res = spawnSync(cmd, {
+    stdio: "inherit",
+    shell: true,
+    env: { ...process.env, CI: process.env.CI || "1", CODEX_QUIET_MODE: "1" }, // nudge non-interactive mode and suppress UI
+  });
   if (res.status !== 0) {
     console.warn("Codex CLI exited non-zero (continuing).");
   }
