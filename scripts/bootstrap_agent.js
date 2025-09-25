@@ -154,7 +154,7 @@ function syncRepository(name, repoConfig) {
 
       runInherit("git", ["-C", repoPath, "fetch", "origin", "--prune"]);
       // Always check out from remote ref; avoids "pathspec" issues
-      runInherit("git", ["-C", repoPath, "checkout", "-B", branch, `origin/${branch}`]);
+      runInherit("git", ["-C", repoPath, "checkout", "-f", "-B", branch, `origin/${branch}`]);
       runInherit("git", ["-C", repoPath, "pull", "--ff-only", "origin", branch]);
     } catch (e) {
       console.error(`\n[${name}] Git update failed: ${e.message}\n`);
