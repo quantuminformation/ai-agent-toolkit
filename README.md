@@ -53,7 +53,7 @@ The entrypoint invokes `scripts/bootstrap_agent.js` which performs the following
 
 ## Quick start (one command)
 
-- Export your API key once in your shell, then run the helper script (allocates a TTY and mounts everything for you):
+- Export your API key once in your shell, then run the helper script (allocates a TTY and mounts everything for you). The script now publishes the Codex auth callback port(s) to your host so that ctrl+click login links work out of the box.
 
 ```
 export OPENAI_API_KEY="{{OPENAI_API_KEY}}"   # set in your shell; do not paste in commands
@@ -86,11 +86,13 @@ docker run --rm \
 - Interactive Codex CLI
   - Ensure OPENAI_API_KEY is already set in your shell; do not paste secrets inline.
   - Allocate a TTY with -it to avoid interactive UI issues.
+  - Publish the auth callback port so browser login can complete from your host.
 
 ```
 docker run --rm -it \
   -v "$PWD/config:/opt/agent/config" \
   -v "$PWD/workspaces:/workspaces" \
+  -p 1455:1455 \
   -e OPENAI_API_KEY="$OPENAI_API_KEY" \
   -e CODEX_CLI_COMMAND="codex run" \
   ai-agent-toolkit:latest
@@ -148,6 +150,9 @@ Add this flag to any docker run to persist the CLI policy to the host (do not ed
 ```
 
 ## Troubleshooting
+
+- Codex login link not opening from your host
+  - By default scripts/run_agent.sh publishes a small range of ports (1455–1465) so ctrl+click on http://localhost:<port>/auth/callback works. If the CLI shows a different port, re-run with AUTH_PORT=<port> scripts/run_agent.sh (or manually add -p <port>:<port> to docker run). To disable publishing, set PUBLISH_AUTH_PORT=0.
 
 - No -it provided
   - When the container is started without a TTY, the bootstrap will still sync repos, apply network policy, and seed data, but it will intentionally skip launching the interactive CLI. Re-run with -it (or use scripts/run_agent.sh) if you want an interactive Codex session.

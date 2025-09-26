@@ -110,13 +110,14 @@ This is the most direct and automated method. Your API credentials will be cache
 
 1.  Get your API key from [platform.openai.com](https://platform.openai.com/account/api-keys). It will look like `sk-...`.
 
-2.  Run the container with your API key. This single command includes a volume mount to cache your credentials, so you won't need the API key for subsequent runs.
+2.  Run the container with your API key. This command now publishes the auth callback port so that ctrl+click on the login link works from your host.
 
     ```bash
     docker run --rm --name codex-agent \
       -v "$PWD/config:/opt/agent/config" \
       -v "$PWD/workspaces:/workspaces" \
       -v "$PWD/.codex:/root/.config/codex" \
+      -p 1455:1455 \
       -e OPENAI_API_KEY="sk-your-api-key" \
       -e CODEX_CLI_COMMAND="codex run" \
       ai-agent-toolkit:latest
@@ -161,6 +162,21 @@ Instead of hardcoding the key in the `docker run` line, you can set it in your s
     ai-agent-toolkit:latest
   ```
 
+- macOS Keychain one‑liner (uses the system keychain):
+
+  ```bash
+  OPENAI_API_KEY=$(security find-generic-password -a "$USER" -s "OPENAI_API_KEY" -w) \
+  docker run --rm --name codex-agent \
+    -v "$PWD/config:/opt/agent/config" \
+    -v "$PWD/workspaces:/workspaces" \
+    -v "$PWD/.codex:/root/.config/codex" \
+    -e OPENAI_API_KEY \
+    -e CODEX_CLI_COMMAND="codex run" \
+    ai-agent-toolkit:latest
+  ```
+
+  Note: Create the keychain item once via the Keychain Access app (Service name: `OPENAI_API_KEY`) before using this command.
+
 - No secret manager? Prompt without echoing to the screen:
 
   ```bash
@@ -188,14 +204,14 @@ Use this option if you do not have an API key. This process involves starting th
 
     ```bash
     docker run -d --name codex-agent \
-      -p 1455:1455 \
+      -p 1455-1465:1455-1465 \
       -v "$PWD/config:/opt/agent/config" \
       -v "$PWD/workspaces:/workspaces" \
       -v "$PWD/.codex:/root/.config/codex" \
       -e CODEX_CLI_COMMAND="" \
       ai-agent-toolkit:latest
     ```
-    > **Note:** We publish port `1455` as a default. If the CLI chooses a different port, you will need to stop this container and restart it with the correct port mapping (e.g., `-p <new_port>:<new_port>`).
+    > **Note:** We publish a small range by default to accommodate CLI port selection. If the CLI chooses a port outside this range, stop the container and restart it with the correct mapping (e.g., `-p <new_port>:<new_port>`).
 
 2.  Open a shell inside the running container:
 
@@ -225,6 +241,7 @@ Use this option if you do not have an API key. This process involves starting th
       -v "$PWD/config:/opt/agent/config" \
       -v "$PWD/workspaces:/workspaces" \
       -v "$PWD/.codex:/root/.config/codex" \
+      -p 1455:1455 \
       -e CODEX_CLI_COMMAND="codex run" \
       ai-agent-toolkit:latest
     ```
