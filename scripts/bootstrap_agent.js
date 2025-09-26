@@ -267,8 +267,10 @@ function launchAgent() {
     );
     return;
   }
-  if (!process.env.OPENAI_API_KEY) {
+  const includesBrowserLogin = /\bcodex\s+auth\s+login\b/.test(raw);
+  if (!process.env.OPENAI_API_KEY && !includesBrowserLogin) {
     console.error("[codex] OPENAI_API_KEY is not set; refusing to run Codex CLI.");
+    console.error("        Tip: Use AUTH_LOGIN=1 with the helper script to perform browser login.");
     return;
   }
   // Decide interactivity: default to interactive when attached to a TTY,

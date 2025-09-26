@@ -6,7 +6,13 @@ NAME="${NAME:-codex-agent}"
 CONFIG_DIR="${CONFIG_DIR:-$PWD/config}"
 WORK_DIR="${WORK_DIR:-$PWD/workspaces}"
 SCRIPTS_DIR="${SCRIPTS_DIR:-$PWD/scripts}"
-CLI_CMD="${CODEX_CLI_COMMAND:-codex run}"
+# When AUTH_LOGIN=1, default to interactive browser login then run the agent.
+AUTH_LOGIN="${AUTH_LOGIN:-0}"
+CLI_CMD_DEFAULT="codex run"
+if [[ "$AUTH_LOGIN" == "1" ]]; then
+  CLI_CMD_DEFAULT="codex auth login && codex run"
+fi
+CLI_CMD="${CODEX_CLI_COMMAND:-$CLI_CMD_DEFAULT}"
 
 # Port publishing for Codex browser login callback
 # By default, publish a small range so the login flow works even if the CLI picks
@@ -16,12 +22,17 @@ PUBLISH_AUTH_PORT="${PUBLISH_AUTH_PORT:-1}"
 AUTH_PORT="${AUTH_PORT:-}"
 AUTH_PORT_RANGE="${AUTH_PORT_RANGE:-1455-1465}"
 
-if [[ -z "${OPENAI_API_KEY:-}" ]]; then
-  echo "OPENAI_API_KEY is not set in your shell. Export it before running." >&2
+# Require API key unless doing browser login.
+if [[ -z "${OPENAI_API_KEY:-}" && "$AUTH_LOGIN" != "1" ]]; then
+  echo "OPENAI_API_KEY is not set in your shell. Export it or run with AUTH_LOGIN=1 for browser login." >&2
   exit 1
 fi
 
 POLICY_MOUNT=()
+# Always persist CLI credentials/policy when doing browser login unless the caller disables it.
+if [[ "$AUTH_LOGIN" == "1" && "${PERSIST_POLICY:-unset}" == "unset" ]]; then
+  PERSIST_POLICY=1
+fi
 if [[ "${PERSIST_POLICY:-0}" == "1" ]]; then
   mkdir -p "$PWD/.codex" >/dev/null 2>&1 || true
   POLICY_MOUNT=(-v "$PWD/.codex:/root/.config/codex")
@@ -38,12 +49,16 @@ if [[ "$PUBLISH_AUTH_PORT" == "1" ]]; then
   fi
 fi
 
+if [[ "$AUTH_LOGIN" == "1" ]]; then
+  echo "Browser-login mode: will run 'codex auth login' inside the container, then 'codex run'." >&2
+fi
+
 exec docker run --rm -it --name "$NAME" \
   -v "$CONFIG_DIR:/opt/agent/config" \
   -v "$WORK_DIR:/workspaces" \
   -v "$SCRIPTS_DIR:/opt/agent/scripts" \
-  ${POLICY_MOUNT+"${POLICY_MOUNT[@]}"} \
-  ${PUBLISH_FLAGS+"${PUBLISH_FLAGS[@]}"} \
-  -e OPENAI_API_KEY="$OPENAI_API_KEY" \
+  "${POLICY_MOUNT[@]}" \
+  "${PUBLISH_FLAGS[@]}" \
+  -e OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
   -e CODEX_CLI_COMMAND="$CLI_CMD" \
   "$IMAGE"

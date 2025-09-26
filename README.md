@@ -35,13 +35,10 @@ The provided `docker/Dockerfile` builds a lightweight Node.js image with the pre
 docker build -t ai-agent-toolkit:latest -f docker/Dockerfile .
 ```
 
-To run the container and mount the configuration and shared workspace:
+To run the container, use the helper script which handles mounts, port publishing, and policy automatically:
 
 ```
-docker run --rm \
-  -v "$PWD/config:/opt/agent/config" \
-  -v "$PWD/workspaces:/workspaces" \
-  ai-agent-toolkit:latest
+scripts/run_agent.sh
 ```
 
 The entrypoint invokes `scripts/bootstrap_agent.js` which performs the following steps:
@@ -53,11 +50,18 @@ The entrypoint invokes `scripts/bootstrap_agent.js` which performs the following
 
 ## Quick start (one command)
 
-- Export your API key once in your shell, then run the helper script (allocates a TTY and mounts everything for you). The script now publishes the Codex auth callback port(s) to your host so that ctrl+click login links work out of the box.
+- Option A — API key
+  - Export your API key once in your shell, then run the helper script (allocates a TTY and mounts everything for you). The script publishes the Codex auth callback port(s) so ctrl+click login links work.
 
 ```
 export OPENAI_API_KEY="{{OPENAI_API_KEY}}"   # set in your shell; do not paste in commands
 scripts/run_agent.sh
+```
+
+- Option B — One‑click browser login (no API key)
+  - This will run `codex auth login` inside the container and then `codex run`. Credentials are persisted to `.codex/` by default, and ports 1455–1465 are published for the callback.
+```
+AUTH_LOGIN=1 scripts/run_agent.sh
 ```
 
 - To persist the CLI policy file as a cache on your host (optional):
@@ -68,47 +72,38 @@ PERSIST_POLICY=1 scripts/run_agent.sh
 
 ## Common commands
 
-- Build the image (same as above)
+- Build the image
 
 ```
 docker build -t ai-agent-toolkit:latest -f docker/Dockerfile .
 ```
 
-- Sync/policy only (no interactive CLI launch)
+- Run the agent (API key)
+  - Export your key once in your shell; the script passes it through.
 
 ```
-docker run --rm \
-  -v "$PWD/config:/opt/agent/config" \
-  -v "$PWD/workspaces:/workspaces" \
-  ai-agent-toolkit:latest
+export OPENAI_API_KEY="{{OPENAI_API_KEY}}"
+scripts/run_agent.sh
 ```
 
-- Interactive Codex CLI
-  - Ensure OPENAI_API_KEY is already set in your shell; do not paste secrets inline.
-  - Allocate a TTY with -it to avoid interactive UI issues.
-  - Publish the auth callback port so browser login can complete from your host.
+- Run the agent (browser login; no API key)
+  - Publishes the auth callback port range and persists credentials by default.
 
 ```
-docker run --rm -it \
-  -v "$PWD/config:/opt/agent/config" \
-  -v "$PWD/workspaces:/workspaces" \
-  -p 1455:1455 \
-  -e OPENAI_API_KEY="$OPENAI_API_KEY" \
-  -e CODEX_CLI_COMMAND="codex run" \
-  ai-agent-toolkit:latest
+AUTH_LOGIN=1 PERSIST_POLICY=1 scripts/run_agent.sh
 ```
 
-- Rapid iteration on startup logic (optional)
-  - Mount local scripts instead of rebuilding the image:
+- Sync/policy only (no interactive CLI)
 
 ```
-docker run --rm -it \
-  -v "$PWD/config:/opt/agent/config" \
-  -v "$PWD/workspaces:/workspaces" \
-  -v "$PWD/scripts:/opt/agent/scripts" \
-  -e OPENAI_API_KEY="$OPENAI_API_KEY" \
-  -e CODEX_CLI_COMMAND="codex run" \
-  ai-agent-toolkit:latest
+CODEX_CLI_COMMAND="" PUBLISH_AUTH_PORT=0 scripts/run_agent.sh
+```
+
+- Rapid iteration on startup logic
+  - Edit files under scripts/ locally; the helper already bind-mounts scripts/ into the container. To override the mount directory:
+
+```
+SCRIPTS_DIR="$PWD/scripts" scripts/run_agent.sh
 ```
 
 - Lint/Tests
@@ -143,10 +138,10 @@ docker run --rm -it \
 
 ### Optional: persist Codex policy across runs
 
-Add this flag to any docker run to persist the CLI policy to the host (do not edit it; it is overwritten each run):
+When using the helper script, enable persistence by setting PERSIST_POLICY=1 (credentials/policy will be saved under `.codex/`):
 
 ```
--v "$PWD/.codex:/root/.config/codex"
+PERSIST_POLICY=1 scripts/run_agent.sh
 ```
 
 ## Troubleshooting
