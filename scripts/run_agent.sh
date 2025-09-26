@@ -28,14 +28,18 @@ if [[ -z "${OPENAI_API_KEY:-}" && "$AUTH_LOGIN" != "1" ]]; then
   exit 1
 fi
 
-POLICY_MOUNT=()
+CREDS_MOUNTS=()
 # Always persist CLI credentials/policy when doing browser login unless the caller disables it.
 if [[ "$AUTH_LOGIN" == "1" && "${PERSIST_POLICY:-unset}" == "unset" ]]; then
   PERSIST_POLICY=1
 fi
 if [[ "${PERSIST_POLICY:-0}" == "1" ]]; then
   mkdir -p "$PWD/.codex" >/dev/null 2>&1 || true
-  POLICY_MOUNT=(-v "$PWD/.codex:/root/.config/codex")
+  mkdir -p "$PWD/.openai" >/dev/null 2>&1 || true
+  CREDS_MOUNTS=(
+    -v "$PWD/.codex:/root/.config/codex"
+    -v "$PWD/.openai:/root/.config/openai"
+  )
 fi
 
 PUBLISH_FLAGS=()
@@ -57,7 +61,7 @@ exec docker run --rm -it --name "$NAME" \
   -v "$CONFIG_DIR:/opt/agent/config" \
   -v "$WORK_DIR:/workspaces" \
   -v "$SCRIPTS_DIR:/opt/agent/scripts" \
-  "${POLICY_MOUNT[@]}" \
+  "${CREDS_MOUNTS[@]}" \
   "${PUBLISH_FLAGS[@]}" \
   -e OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
   -e CODEX_CLI_COMMAND="$CLI_CMD" \
