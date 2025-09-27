@@ -18,9 +18,21 @@ The repository delivers:
 **Quick workflow for beginners:**
 1. Copy `config/agent_config.example.json` to `config/agent_config.json`
 2. Update the config file with your GitHub repository URLs
-3. Build the Docker image: `docker build -t ai-agent-toolkit:latest -f docker/Dockerfile .`
-4. Start container shell: `PERSIST_POLICY=1 CODEX_CLI_COMMAND="/bin/bash" scripts/run_agent.sh`
-5. Inside container: `codex auth login` then `codex run`
+3. Build the Docker image:
+```bash
+docker build -t ai-agent-toolkit:latest -f docker/Dockerfile .
+```
+4. Start container shell:
+```bash
+PERSIST_POLICY=1 CODEX_CLI_COMMAND="/bin/bash" scripts/run_agent.sh
+```
+5. Inside container:
+```bash
+codex auth login
+```
+```bash
+codex run
+```
 6. Ask the AI to help with your code!
 
 **Need more details?** See the sections below for configuration options and advanced usage.
@@ -89,6 +101,7 @@ PERSIST_POLICY=1 CODEX_CLI_COMMAND="/bin/bash" scripts/run_agent.sh
 - Opens a shell inside the container where you can run AI agent commands
 - `PERSIST_POLICY=1` saves your login credentials so you don't have to log in every time
 - You stay in the container even after the AI agent exits
+- **No API key needed** - you can use browser login from inside the container
 - **Best for:** Learning, debugging, or when you want control over each step
 
 ### 3. One-shot run (Advanced)

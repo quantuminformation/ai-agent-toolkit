@@ -7,7 +7,14 @@ CONFIG_DIR="${CONFIG_DIR:-$PWD/config}"
 WORK_DIR="${WORK_DIR:-$PWD/workspaces}"
 SCRIPTS_DIR="${SCRIPTS_DIR:-$PWD/scripts}"
 # When AUTH_LOGIN=1, default to interactive browser login then run the agent.
-AUTH_LOGIN="${AUTH_LOGIN:-0}"
+# Auto-enable browser login if no API key is present and not requesting shell access
+if [[ -z "${OPENAI_API_KEY:-}" && "${CODEX_CLI_COMMAND:-}" != "/bin/bash" && -z "${AUTH_LOGIN:-}" ]]; then
+  AUTH_LOGIN="1"
+  echo "No API key found. Automatically enabling browser login..." >&2
+else
+  AUTH_LOGIN="${AUTH_LOGIN:-0}"
+fi
+
 CLI_CMD_DEFAULT="codex run"
 if [[ "$AUTH_LOGIN" == "1" ]]; then
   CLI_CMD_DEFAULT="codex auth login && codex run"
@@ -21,12 +28,6 @@ CLI_CMD="${CODEX_CLI_COMMAND:-$CLI_CMD_DEFAULT}"
 PUBLISH_AUTH_PORT="${PUBLISH_AUTH_PORT:-1}"
 AUTH_PORT="${AUTH_PORT:-}"
 AUTH_PORT_RANGE="${AUTH_PORT_RANGE:-1455-1465}"
-
-# Require API key unless doing browser login.
-if [[ -z "${OPENAI_API_KEY:-}" && "$AUTH_LOGIN" != "1" ]]; then
-  echo "OPENAI_API_KEY is not set in your shell. Export it or run with AUTH_LOGIN=1 for browser login." >&2
-  exit 1
-fi
 
 CREDS_MOUNTS=()
 # Always persist CLI credentials/policy when doing browser login unless the caller disables it.
@@ -50,6 +51,26 @@ if [[ "$PUBLISH_AUTH_PORT" == "1" ]]; then
   else
     PUBLISH_FLAGS=(-p "$AUTH_PORT_RANGE:$AUTH_PORT_RANGE")
     echo "Publishing auth callback port range $AUTH_PORT_RANGE → host (covers Codex dynamic ports)" >&2
+  fi
+fi
+
+# Check if container with same name exists and handle it
+if docker ps -a --format '{{.Names}}' | grep -q "^${NAME}$"; then
+  echo "Found existing container '$NAME'. Checking status..." >&2
+  if docker ps --format '{{.Names}}' | grep -q "^${NAME}$"; then
+    echo "Container '$NAME' is running. Connecting to existing container..." >&2
+    echo "Use 'docker stop $NAME' if you want to start fresh." >&2
+    exec docker exec -it "$NAME" /bin/bash
+  else
+    echo "Removing stopped container '$NAME'..." >&2
+    if ! docker rm "$NAME" 2>/dev/null; then
+      echo "Failed to remove container '$NAME'. Trying with force..." >&2
+      docker rm -f "$NAME" 2>/dev/null || {
+        echo "Error: Could not remove existing container '$NAME'." >&2
+        echo "Please run: docker rm -f $NAME" >&2
+        exit 1
+      }
+    fi
   fi
 fi
 

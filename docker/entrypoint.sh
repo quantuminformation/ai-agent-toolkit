@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# Create symlink for easy access to agent tools from workspaces
+if [[ ! -e /workspaces/.agent ]]; then
+  ln -sf /opt/agent /workspaces/.agent
+fi
+
 CONFIG_PATH=${AGENT_CONFIG_PATH:-/opt/agent/config/agent_config.json}
 
 if [[ ! -f "$CONFIG_PATH" ]]; then

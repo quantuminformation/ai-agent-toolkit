@@ -2,7 +2,7 @@
 
 FROM node:20-bookworm-slim
 ENV AGENT_HOME=/opt/agent CODEX_CLI_COMMAND=""
-WORKDIR ${AGENT_HOME}
+WORKDIR /workspaces
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git ca-certificates curl bash util-linux socat \
