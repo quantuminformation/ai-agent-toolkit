@@ -2,6 +2,26 @@
 
 - For security details and common concerns, see [SECURITY.md](SECURITY.md).
 
+> Quick start (4 steps)
+>
+> 1) Build the image:
+> ```bash path=null start=null
+> docker build -t ai-agent-toolkit:latest -f docker/Dockerfile .
+> ```
+> 2) Start a shell with login ports (first run):
+> ```bash path=null start=null
+> PERSIST_POLICY=1 PUBLISH_AUTH_PORT=1 CODEX_CLI_COMMAND="/bin/bash" scripts/run_agent.sh
+> ```
+> 3) Inside the container:
+> ```bash path=null start=null
+> codex auth login
+> codex run
+> ```
+> 4) Next runs (no login needed):
+> ```bash path=null start=null
+> PERSIST_POLICY=1 CODEX_CLI_COMMAND="/bin/bash" scripts/run_agent.sh
+> ```
+
 This repository provides a minimal workflow for managing a Docker image that runs an AI coding agent (such as the Codex CLI) against two Git repositories:
 
 * A **specification repository** that contains product requirements and task descriptions.
@@ -15,25 +35,27 @@ The repository delivers:
 
 ## Getting started
 
-**Quick workflow for beginners:**
+**Quick workflow for beginners (shell-first):**
 1. Copy `config/agent_config.example.json` to `config/agent_config.json`
 2. Update the config file with your GitHub repository URLs
 3. Build the Docker image:
 ```bash
 docker build -t ai-agent-toolkit:latest -f docker/Dockerfile .
 ```
-4. Start container shell:
+4. Start container shell (publish login ports on first run):
+```bash
+PERSIST_POLICY=1 PUBLISH_AUTH_PORT=1 CODEX_CLI_COMMAND="/bin/bash" scripts/run_agent.sh
+```
+5. Inside container (first time):
+```bash
+codex auth login
+codex run
+```
+6. Next time you can skip port publishing unless you need to log in again:
 ```bash
 PERSIST_POLICY=1 CODEX_CLI_COMMAND="/bin/bash" scripts/run_agent.sh
 ```
-5. Inside container:
-```bash
-codex auth login
-```
-```bash
-codex run
-```
-6. Ask the AI to help with your code!
+7. Ask the AI to help with your code!
 
 **Need more details?** See the sections below for configuration options and advanced usage.
 
@@ -55,7 +77,7 @@ The provided `docker/Dockerfile` builds a lightweight Node.js image with the pre
 docker build -t ai-agent-toolkit:latest -f docker/Dockerfile .
 ```
 
-To run the container, use the helper script which handles mounts, port publishing, and policy automatically:
+To run the container, use the helper script which handles mounts, port publishing, and policy automatically. By default it runs in sync-only mode: it clones/updates the repos and applies policy, then exits. See Quick start below for the recommended shell-first workflow and other options.
 
 ```
 scripts/run_agent.sh
@@ -95,11 +117,14 @@ docker build -t ai-agent-toolkit:latest -f docker/Dockerfile .
 
 ### 2. Start a container shell (Recommended for beginners)
 ```bash
-PERSIST_POLICY=1 CODEX_CLI_COMMAND="/bin/bash" scripts/run_agent.sh
+PERSIST_POLICY=1 PUBLISH_AUTH_PORT=1 CODEX_CLI_COMMAND="/bin/bash" scripts/run_agent.sh
 ```
+Tip: After you’ve logged in once, you can omit `PUBLISH_AUTH_PORT=1` on future runs unless you need to log in again.
+
 **What this does:** 
 - Opens a shell inside the container where you can run AI agent commands
 - `PERSIST_POLICY=1` saves your login credentials so you don't have to log in every time
+- Publishes the auth callback port(s) so browser login works from your host
 - You stay in the container even after the AI agent exits
 - **No API key needed** - you can use browser login from inside the container
 - **Best for:** Learning, debugging, or when you want control over each step
@@ -169,10 +194,49 @@ When using the helper script, enable persistence by setting PERSIST_POLICY=1 (cr
 PERSIST_POLICY=1 scripts/run_agent.sh
 ```
 
+### Browser login (AUTH_LOGIN=1) guide
+
+Use this if you don’t have an API key exported. This starts a local callback server in the container and prints a URL to auth.openai.com that you open in your browser.
+
+- One-shot login + run
+
+```
+AUTH_LOGIN=1 PERSIST_POLICY=1 scripts/run_agent.sh
+```
+
+What you should see
+- “Starting local login server on http://localhost:1455.”
+- A long auth.openai.com URL. Open it, sign in, and the CLI will continue.
+- “Successfully logged in,” followed by the Codex UI.
+
+If the port is different
+- If the CLI chooses a different port, pin it:
+```
+AUTH_LOGIN=1 AUTH_PORT=1456 PERSIST_POLICY=1 scripts/run_agent.sh
+```
+
+Shell-first alternative (manual login)
+- Keep a shell open in the container and run Codex yourself:
+```
+PERSIST_POLICY=1 PUBLISH_AUTH_PORT=1 CODEX_CLI_COMMAND="/bin/bash" scripts/run_agent.sh
+```
+- Then inside the container:
+```
+codex auth login
+codex run
+```
+
+Persistence
+- With PERSIST_POLICY=1, credentials are saved to .openai/ and policy to .codex/ in your project.
+- Verify on the host:
+```
+ls -la .openai .codex
+```
+
 ## Troubleshooting
 
 - Codex login link not opening from your host
-  - By default scripts/run_agent.sh publishes a small range of ports (1455–1465) so ctrl+click on http://localhost:<port>/auth/callback works. If the CLI shows a different port, re-run with AUTH_PORT=<port> scripts/run_agent.sh (or manually add -p <port>:<port> to docker run). To disable publishing, set PUBLISH_AUTH_PORT=0.
+  - If you used one-shot login, ports are published automatically. In shell-first mode, re-run with `PUBLISH_AUTH_PORT=1` (or pin a port with `AUTH_PORT=<port>`). If needed, you can manually add `-p <port>:<port>` to a docker run.
 
 - No -it provided
   - When the container is started without a TTY, the bootstrap will still sync repos, apply network policy, and seed data, but it will intentionally skip launching the interactive CLI. Re-run with -it (or use scripts/run_agent.sh) if you want an interactive Codex session.

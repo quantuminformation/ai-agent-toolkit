@@ -270,7 +270,12 @@ function launchAgent() {
   const includesBrowserLogin = /\bcodex\s+auth\s+login\b/.test(raw);
   if (!process.env.OPENAI_API_KEY && !includesBrowserLogin) {
     console.warn("[codex] OPENAI_API_KEY is not set; attempting to use cached credentials.");
-    console.warn("        If this fails, re-run with AUTH_LOGIN=1 to perform browser login.");
+    console.warn("        If auth fails (401/Unauthorized), do one of the following on your host:");
+    console.warn("          1) One-shot browser login: AUTH_LOGIN=1 PERSIST_POLICY=1 scripts/run_agent.sh");
+    console.warn("             - Expect: 'Starting local login server on http://localhost:1455' and an auth.openai.com URL");
+    console.warn("             - If the CLI chooses a different port, re-run with AUTH_PORT=<port> AUTH_LOGIN=1 PERSIST_POLICY=1 scripts/run_agent.sh");
+    console.warn("          2) Shell-first: PERSIST_POLICY=1 PUBLISH_AUTH_PORT=1 CODEX_CLI_COMMAND=\"/bin/bash\" scripts/run_agent.sh");
+    console.warn("             - Then run inside the container: 'codex auth login' followed by 'codex run' (you can omit PUBLISH_AUTH_PORT next time)");
   }
   // Decide interactivity: default to interactive when attached to a TTY,
   // or when explicitly requested via CODEX_INTERACTIVE=1. Disable when CODEX_INTERACTIVE=0.

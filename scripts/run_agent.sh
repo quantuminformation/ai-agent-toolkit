@@ -6,35 +6,49 @@ NAME="${NAME:-codex-agent}"
 CONFIG_DIR="${CONFIG_DIR:-$PWD/config}"
 WORK_DIR="${WORK_DIR:-$PWD/workspaces}"
 SCRIPTS_DIR="${SCRIPTS_DIR:-$PWD/scripts}"
-# When AUTH_LOGIN=1, default to interactive browser login then run the agent.
-# Auto-enable browser login if no API key is present and not requesting shell access
-if [[ -z "${OPENAI_API_KEY:-}" && "${CODEX_CLI_COMMAND:-}" != "/bin/bash" && -z "${AUTH_LOGIN:-}" ]]; then
-  AUTH_LOGIN="1"
-  echo "No API key found. Automatically enabling browser login..." >&2
-else
-  AUTH_LOGIN="${AUTH_LOGIN:-0}"
-fi
-
-CLI_CMD_DEFAULT="codex run"
+# Default: sync-only. No automatic login or CLI launch.
+AUTH_LOGIN="${AUTH_LOGIN:-0}"
+CLI_CMD_DEFAULT=""
 if [[ "$AUTH_LOGIN" == "1" ]]; then
   CLI_CMD_DEFAULT="codex auth login && codex run"
 fi
 CLI_CMD="${CODEX_CLI_COMMAND:-$CLI_CMD_DEFAULT}"
 
+# If we're not launching the CLI, print friendly next steps.
+if [[ -z "$CLI_CMD" ]]; then
+  echo "Sync-only mode: will clone/update repos, apply policy, and then exit without starting Codex." >&2
+  echo "Next steps:" >&2
+  echo "  - To open a shell in the container: PERSIST_POLICY=1 CODEX_CLI_COMMAND=\"/bin/bash\" scripts/run_agent.sh" >&2
+  echo "  - Inside the container: run 'codex auth login' (first time) and then 'codex run'." >&2
+  echo "  - If a container is already running: docker exec -it $NAME /bin/bash" >&2
+fi
+
 # Port publishing for Codex browser login callback
-# By default, publish a small range so the login flow works even if the CLI picks
-# a non-default port. You can disable with PUBLISH_AUTH_PORT=0 or override the
-# exact port(s) with AUTH_PORT or AUTH_PORT_RANGE.
-PUBLISH_AUTH_PORT="${PUBLISH_AUTH_PORT:-1}"
+# Publish only when explicitly requested or when AUTH_LOGIN=1
+if [[ -z "${PUBLISH_AUTH_PORT:-}" ]]; then
+  if [[ "$AUTH_LOGIN" == "1" ]]; then
+    PUBLISH_AUTH_PORT=1
+  else
+    PUBLISH_AUTH_PORT=0
+  fi
+fi
 AUTH_PORT="${AUTH_PORT:-}"
 AUTH_PORT_RANGE="${AUTH_PORT_RANGE:-1455-1465}"
+
+# Optional: persist the entire container home (/root) between runs.
+# This guarantees Codex credentials are saved even if the CLI writes outside .openai/.codex.
+PERSIST_HOME="${PERSIST_HOME:-0}"
 
 CREDS_MOUNTS=()
 # Always persist CLI credentials/policy when doing browser login unless the caller disables it.
 if [[ "$AUTH_LOGIN" == "1" && "${PERSIST_POLICY:-unset}" == "unset" ]]; then
   PERSIST_POLICY=1
 fi
-if [[ "${PERSIST_POLICY:-0}" == "1" ]]; then
+if [[ "${PERSIST_HOME}" == "1" ]]; then
+  mkdir -p "$PWD/.container_home" >/dev/null 2>&1 || true
+  echo "Persisting entire container home to .container_home/ (strongest persistence)." >&2
+  CREDS_MOUNTS=(-v "$PWD/.container_home:/root")
+elif [[ "${PERSIST_POLICY:-0}" == "1" ]]; then
   mkdir -p "$PWD/.codex" >/dev/null 2>&1 || true
   mkdir -p "$PWD/.openai" >/dev/null 2>&1 || true
   CREDS_MOUNTS=(
@@ -58,9 +72,10 @@ fi
 if docker ps -a --format '{{.Names}}' | grep -q "^${NAME}$"; then
   echo "Found existing container '$NAME'. Checking status..." >&2
   if docker ps --format '{{.Names}}' | grep -q "^${NAME}$"; then
-    echo "Container '$NAME' is running. Connecting to existing container..." >&2
-    echo "Use 'docker stop $NAME' if you want to start fresh." >&2
-    exec docker exec -it "$NAME" /bin/bash
+    echo "Container '$NAME' is already running." >&2
+    echo "To connect: docker exec -it $NAME /bin/bash" >&2
+    echo "To stop:    docker stop $NAME" >&2
+    exit 0
   else
     echo "Removing stopped container '$NAME'..." >&2
     if ! docker rm "$NAME" 2>/dev/null; then
