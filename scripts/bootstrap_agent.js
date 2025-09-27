@@ -314,22 +314,59 @@ function main() {
     return 0;
   }
 
+  // Repo resolution: support single-repo mode where docs and source live together.
   let allReady = true;
-  for (const repoName of ["spec", "source"]) {
-    const repoKey = `${repoName}_repo`;
-    if (!config[repoKey]) {
-      console.error(`Missing ${repoKey} section in configuration`);
+  let specPathResolved = null;
+  let sourcePathResolved = null;
+
+  const singleRepo = Boolean(config.docs_and_source_same_repo);
+  if (singleRepo) {
+    const combined = (config.source_repo && config.source_repo.url) ? config.source_repo : config.spec_repo;
+    if (!combined || !combined.url) {
+      console.error("[repos] docs_and_source_same_repo=true but no spec_repo/source_repo with a URL was provided.");
       allReady = false;
-      continue;
+    } else {
+      console.log("[repos] Single-repo mode is ON. The source repository configuration (if any) will be ignored.");
+      // Sync once, prefer labeling it as 'source' for logs.
+      const ok = syncRepository("source", combined);
+      if (!ok) {
+        allReady = false;
+      } else {
+        // Resolve both paths to the same location (prefer provided path; default to /workspaces/source).
+        const p = resolveRepoPath("source", combined);
+        sourcePathResolved = p;
+        specPathResolved = p;
+      }
     }
-    const ok = syncRepository(repoName, config[repoKey]);
-    if (!ok) allReady = false;
+  } else {
+    // Two-repo mode (default)
+    for (const repoName of ["spec", "source"]) {
+      const repoKey = `${repoName}_repo`;
+      if (!config[repoKey]) {
+        console.error(`Missing ${repoKey} section in configuration`);
+        allReady = false;
+        continue;
+      }
+      const ok = syncRepository(repoName, config[repoKey]);
+      if (!ok) allReady = false;
+    }
+    // Resolve paths for env propagation
+    if (config.spec_repo && config.spec_repo.url) {
+      specPathResolved = resolveRepoPath("spec", config.spec_repo);
+    }
+    if (config.source_repo && config.source_repo.url) {
+      sourcePathResolved = resolveRepoPath("source", config.source_repo);
+    }
   }
 
   if (!allReady) {
     console.log("\nOne or more repositories are not ready. Please follow the instructions above and rerun.\n");
     return 0; // clean exit, no stacktraces
   }
+
+  // Export paths for downstream scripts (e.g., seed scripts or helpers)
+  if (specPathResolved) process.env.AGENT_SPEC_PATH = specPathResolved;
+  if (sourcePathResolved) process.env.AGENT_SOURCE_PATH = sourcePathResolved;
 
   const { mode, allowedSites } = resolveNetworkPolicy(config);
   applyNetworkPolicy(mode, allowedSites);

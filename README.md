@@ -1,5 +1,7 @@
 # AI Agent Toolkit
 
+- For security details and common concerns, see [SECURITY.md](SECURITY.md).
+
 This repository provides a minimal workflow for managing a Docker image that runs an AI coding agent (such as the Codex CLI) against two Git repositories:
 
 * A **specification repository** that contains product requirements and task descriptions.
@@ -21,7 +23,7 @@ The repository delivers:
 
 The agent runtime is governed by `config/agent_config.json`. The file captures:
 
-* `spec_repo` and `source_repo` – Git repository URLs and optional branch overrides that will be cloned into the container.
+* `spec_repo` and `source_repo` – Git repository URLs and optional branch overrides that will be cloned into the container. To use a single repository for both docs and source, set `docs_and_source_same_repo: true`.
 * `internet_access` – Controls whether the agent has no network connectivity, access to a curated list of common Codex documentation sites, or full unrestricted egress.
 * `allow_unrestricted_mode` – A safety flag (default `false`). Even if the configuration requests unrestricted network access, the runtime will only honor it when this flag is explicitly set to `true`.
 
@@ -48,24 +50,32 @@ The entrypoint invokes `scripts/bootstrap_agent.js` which performs the following
 3. Applies the network policy by exporting environment variables the Codex CLI can read.
 4. Launches the Codex CLI agent in restricted or unrestricted mode as dictated by the configuration.
 
-## Quick start (one command)
+## Quick start (default workflow)
 
-- Option A — API key
-  - Export your API key once in your shell, then run the helper script (allocates a TTY and mounts everything for you). The script publishes the Codex auth callback port(s) so ctrl+click login links work.
+Use the shell-first workflow: start a shell inside the container, then run Codex manually. You’ll remain inside the container even after Codex exits.
 
 ```
-export OPENAI_API_KEY="{{OPENAI_API_KEY}}"   # set in your shell; do not paste in commands
-scripts/run_agent.sh
+PERSIST_POLICY=1 CODEX_CLI_COMMAND="/bin/bash" scripts/run_agent.sh
 ```
 
-- Option B — One‑click browser login (no API key)
-  - This will run `codex auth login` inside the container and then `codex run`. Credentials are persisted to `.codex/` by default, and ports 1455–1465 are published for the callback.
+Inside the container:
+
 ```
-AUTH_LOGIN=1 scripts/run_agent.sh
+# if not logged in yet
+codex auth login
+
+# start or resume a session
+codex run
+# or
+codex resume <session-id>
 ```
 
-- To persist the CLI policy file as a cache on your host (optional):
+Alternative (one-shot login and run; exits when Codex exits):
+```
+AUTH_LOGIN=1 PERSIST_POLICY=1 scripts/run_agent.sh
+```
 
+To persist credentials/policy on your host (already enabled above with PERSIST_POLICY=1):
 ```
 PERSIST_POLICY=1 scripts/run_agent.sh
 ```
@@ -78,19 +88,23 @@ PERSIST_POLICY=1 scripts/run_agent.sh
 docker build -t ai-agent-toolkit:latest -f docker/Dockerfile .
 ```
 
-- Run the agent (API key)
-  - Export your key once in your shell; the script passes it through.
+- Shell-first (recommended)
+
+```
+PERSIST_POLICY=1 CODEX_CLI_COMMAND="/bin/bash" scripts/run_agent.sh
+```
+
+- One-shot login + run (exits when Codex exits)
+
+```
+AUTH_LOGIN=1 PERSIST_POLICY=1 scripts/run_agent.sh
+```
+
+- API key based run (no browser login)
 
 ```
 export OPENAI_API_KEY="{{OPENAI_API_KEY}}"
 scripts/run_agent.sh
-```
-
-- Run the agent (browser login; no API key)
-  - Publishes the auth callback port range and persists credentials by default.
-
-```
-AUTH_LOGIN=1 PERSIST_POLICY=1 scripts/run_agent.sh
 ```
 
 - Sync/policy only (no interactive CLI)
@@ -132,13 +146,14 @@ SCRIPTS_DIR="$PWD/scripts" scripts/run_agent.sh
     - If stdout isn’t a TTY, it wraps the command with script -qfec to provide a pseudo-TTY and sets CI=1 and CODEX_QUIET_MODE=1.
 
 - Persistent data layout (host-mounted)
-  - workspaces/specs: clone of the specs repo (see config.spec_repo)
-  - workspaces/source: clone of the source repo (see config.source_repo)
+- workspaces/specs: clone of the specs repo (see config.spec_repo)
+- workspaces/source: clone of the source repo (see config.source_repo)
+- In single-repo mode (`docs_and_source_same_repo: true`), both AGENT_SPEC_PATH and AGENT_SOURCE_PATH point to the same path.
 - /root/.config/codex/config.json (in-container): generated policy the bootstrap writes/updates. Optionally persist to host by adding a .codex bind mount (see below).
 
 ### Optional: persist Codex policy across runs
 
-When using the helper script, enable persistence by setting PERSIST_POLICY=1 (credentials/policy will be saved under `.codex/`):
+When using the helper script, enable persistence by setting PERSIST_POLICY=1 (credentials and policy will be saved under `.codex/` and `.openai/`):
 
 ```
 PERSIST_POLICY=1 scripts/run_agent.sh
