@@ -15,9 +15,15 @@ The repository delivers:
 
 ## Getting started
 
-1. Copy `config/agent_config.example.json` to `config/agent_config.json` and update it with the correct repository URLs and desired access policy.
-2. Build the Docker image (see [Docker image](#docker-image)).
-3. Launch the container using the helper script so the configuration is applied.
+**Quick workflow for beginners:**
+1. Copy `config/agent_config.example.json` to `config/agent_config.json`
+2. Update the config file with your GitHub repository URLs
+3. Build the Docker image: `docker build -t ai-agent-toolkit:latest -f docker/Dockerfile .`
+4. Start container shell: `PERSIST_POLICY=1 CODEX_CLI_COMMAND="/bin/bash" scripts/run_agent.sh`
+5. Inside container: `codex auth login` then `codex run`
+6. Ask the AI to help with your code!
+
+**Need more details?** See the sections below for configuration options and advanced usage.
 
 ## Configuration
 
@@ -50,78 +56,69 @@ The entrypoint invokes `scripts/bootstrap_agent.js` which performs the following
 3. Applies the network policy by exporting environment variables the Codex CLI can read.
 4. Launches the Codex CLI agent in restricted or unrestricted mode as dictated by the configuration.
 
-## Quick start (default workflow)
+## Usage
 
-Use the shell-first workflow: start a shell inside the container, then run Codex manually. You’ll remain inside the container even after Codex exits.
+Once you're inside the container shell (from command #2 above), use these commands:
 
-```
-PERSIST_POLICY=1 CODEX_CLI_COMMAND="/bin/bash" scripts/run_agent.sh
-```
-
-Inside the container:
-
-```
-# if not logged in yet
+```bash
+# First time setup - log into OpenAI
 codex auth login
 
-# start or resume a session
+# Start a new AI coding session
 codex run
-# or
+
+# Resume a previous session (replace <session-id> with actual ID)
 codex resume <session-id>
 ```
 
-Alternative (one-shot login and run; exits when Codex exits):
-```
-AUTH_LOGIN=1 PERSIST_POLICY=1 scripts/run_agent.sh
-```
-
-To persist credentials/policy on your host (already enabled above with PERSIST_POLICY=1):
-```
-PERSIST_POLICY=1 scripts/run_agent.sh
-```
+**New to AI coding?** Start with `codex run` and ask the AI to help you understand your project structure or create simple features.
 
 ## Common commands
 
-- Build the image
-
-```
+### 1. Build the Docker image
+```bash
 docker build -t ai-agent-toolkit:latest -f docker/Dockerfile .
 ```
+**What this does:** Creates a Docker image with all the tools needed to run AI agents. You need to run this once before using the toolkit.
 
-- Shell-first (recommended)
-
-```
+### 2. Start a container shell (Recommended for beginners)
+```bash
 PERSIST_POLICY=1 CODEX_CLI_COMMAND="/bin/bash" scripts/run_agent.sh
 ```
+**What this does:** 
+- Opens a shell inside the container where you can run AI agent commands
+- `PERSIST_POLICY=1` saves your login credentials so you don't have to log in every time
+- You stay in the container even after the AI agent exits
+- **Best for:** Learning, debugging, or when you want control over each step
 
-- One-shot login + run (exits when Codex exits)
-
-```
+### 3. One-shot run (Advanced)
+```bash
 AUTH_LOGIN=1 PERSIST_POLICY=1 scripts/run_agent.sh
 ```
+**What this does:**
+- Automatically opens browser for OpenAI login
+- Starts AI agent immediately after login
+- Container exits when AI agent finishes
+- **Best for:** Automated workflows once you're comfortable
 
-- API key based run (no browser login)
-
-```
-export OPENAI_API_KEY="{{OPENAI_API_KEY}}"
+### 4. Use API key instead of browser login
+```bash
+export OPENAI_API_KEY="your-actual-api-key-here"
 scripts/run_agent.sh
 ```
+**What this does:**
+- Uses your OpenAI API key instead of browser login
+- Replace `your-actual-api-key-here` with your real API key
+- **Best for:** CI/CD pipelines or when browser login isn't available
 
-- Sync/policy only (no interactive CLI)
-
-```
+### 5. Sync repositories only (no AI agent)
+```bash
 CODEX_CLI_COMMAND="" PUBLISH_AUTH_PORT=0 scripts/run_agent.sh
 ```
-
-- Rapid iteration on startup logic
-  - Edit files under scripts/ locally; the helper already bind-mounts scripts/ into the container. To override the mount directory:
-
-```
-SCRIPTS_DIR="$PWD/scripts" scripts/run_agent.sh
-```
-
-- Lint/Tests
-  - None are defined in this repository. The primary "build" is the Docker image above.
+**What this does:**
+- Updates your spec and source repositories
+- Doesn't start the AI agent
+- **Best for:** Just syncing your code repos without running AI
 
 ## High-level architecture
 

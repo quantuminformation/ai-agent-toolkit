@@ -1,89 +1,43 @@
-# Security & Safety Guide
+# Security Guide
 
-This document addresses common security concerns when using the AI Agent Toolkit and explains the safety measures built into the containerized environment.
+Docker container isolation protects your system while allowing AI agents to work on your project.
 
-## 🔒 Security Overview
+## Container Access
 
-The AI Agent Toolkit runs in a Docker container with multiple layers of security isolation to protect your system while allowing AI agents to work effectively on your projects.
+**✅ Can access:** Project files (mounted directories), internet for AI APIs  
+**❌ Cannot access:** System files, other user directories, Docker daemon, hardware
 
-## 🛡️ Container Security Model
+## File System
 
-### Isolation Boundaries
+Only these directories are mounted:
+- `config/` → `/opt/agent/config`
+- `workspaces/` → `/workspaces`  
+- `scripts/` → `/opt/agent/scripts`
+- `.codex/`, `.openai/` → configuration
 
-**✅ What the container CAN access:**
-- Only files within your project directory that are explicitly mounted
-- Network access for AI model API calls and authentication
-- Standard container runtime resources
+## Network
 
-**❌ What the container CANNOT access:**
-- Your home directory or other user files
-- System files (`/etc`, `/var`, `/usr/local`, etc.)
-- Other Docker containers or the Docker daemon
-- Hardware devices or system services
-- Files outside the mounted project directory
+- **Ports 1455-1465:** Authentication callbacks (localhost only)
+- **Internet access:** AI APIs, authentication, downloads
+- **Cannot:** Modify host network configuration
 
-### Technical Security Measures
+## FAQ
 
-```yaml
-Container Configuration:
-  Privileged Mode: false          # No elevated system access
-  User Namespace: isolated        # Separate user context
-  Process Namespace: isolated     # Cannot see host processes
-  Root Filesystem: container-only # No host filesystem access
-  Capabilities: minimal          # No additional Linux capabilities
-  AppArmor/SELinux: enforced     # OS-level security policies
-```
+**Q: Can AI escape the container?**  
+A: No. Non-privileged, isolated namespaces, no Docker socket.
 
-## 🌐 Network Security
+**Q: Can it access my personal files?**  
+A: No. Only project directory mounted.
 
-### Port Binding
-The container exposes ports 1455-1465 for AI service authentication callbacks:
-- **Local binding only**: Ports bind to your machine, not the internet
-- **Firewall protected**: Your system firewall blocks external access
-- **Temporary usage**: Ports are only used during authentication flows
+**Q: What if AI model is compromised?**  
+A: Damage limited to project files only.
 
-### Internet Access
-The container requires internet access for:
-- AI model API calls (OpenAI, Anthropic, etc.)
-- Authentication callbacks
-- Package downloads and updates
-- Documentation lookup
+## Best Practices
 
-This is **restricted to the container** and cannot affect your host system's network configuration.
-
-## 📁 File System Protection
-
-### Mount Strategy
-Only specific directories are mounted into the container:
-
-```
-Host Path                           → Container Path
-/your-project/config               → /opt/agent/config
-/your-project/workspaces           → /workspaces  
-/your-project/scripts              → /opt/agent/scripts
-/your-project/.codex               → /root/.config/codex
-/your-project/.openai              → /root/.config/openai
-```
-
-### What This Means
-- **Project isolation**: Only your current project is accessible
-- **No system access**: Cannot read system configuration or other users' files  
-- **No Docker socket**: Cannot control other containers or Docker itself
-- **Version control safe**: All changes are within your Git repository
-
-## 🤖 AI Agent Capabilities
-
-### File Operations
-AI agents can:
-- Read and modify files within mounted directories
-- Create new files in the project structure
-- Execute scripts within the container environment
-
-### Safeguards
-- **Version control**: Use Git to track and revert changes
-- **Approval mode**: Optional requirement for user confirmation on file changes
-- **Scoped access**: Limited to project files only
-- **Container isolation**: No access to system or personal files
+- Commit work before running agents
+- Review AI changes before pushing  
+- Enable approval mode for extra safety
+- Monitor container logs if concerned
 
 ## 🚨 Common Security Concerns Addressed
 
