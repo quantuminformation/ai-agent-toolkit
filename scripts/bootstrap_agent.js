@@ -5,6 +5,12 @@ const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
 
+// Make git non-interactive by default inside the container so scripts fail fast
+// and print guidance instead of blocking for username/password.
+if (!process.env.GIT_TERMINAL_PROMPT) process.env.GIT_TERMINAL_PROMPT = "0";
+// Accept new SSH host keys automatically (safe in ephemeral containers)
+if (!process.env.GIT_SSH_COMMAND) process.env.GIT_SSH_COMMAND = "ssh -o StrictHostKeyChecking=accept-new";
+
 const CONFIG_ENV_VAR = "AGENT_CONFIG_PATH";
 const DEFAULT_CONFIG_PATHS = [
   "/opt/agent/config/agent_config.json",

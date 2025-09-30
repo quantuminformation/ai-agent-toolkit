@@ -159,12 +159,25 @@ CODEX_CLI_COMMAND="" PUBLISH_AUTH_PORT=0 scripts/run_agent.sh
 - **Best for:** Just syncing your code repos without running AI
 
 ### 6. Working with private GitHub repositories
-For private GitHub repositories, you need to provide authentication. The easiest way is to use a GitHub Personal Access Token:
+For private GitHub repositories, you need to provide authentication. Choose one of these options:
 
-```bash
-export GITHUB_TOKEN="your-github-token-here"
-scripts/run_agent.sh
-```
+- Token (HTTPS) — easiest and CI-friendly
+  ```bash
+  export GITHUB_TOKEN="your-github-token-here"
+  scripts/run_agent.sh
+  ```
+- Mount your SSH keys (read-only)
+  ```bash
+  MOUNT_SSH=1 scripts/run_agent.sh
+  ```
+- Forward your host SSH agent (Docker Desktop supports this on macOS)
+  ```bash
+  FORWARD_SSH_AGENT=1 scripts/run_agent.sh
+  ```
+
+Notes:
+- The container runs git with GIT_TERMINAL_PROMPT=0 to avoid blocking prompts. If auth is missing, it will fail fast and print guidance.
+- When a token is provided, the container auto-configures git credential storage for github.com.
 
 **To create a GitHub token:**
 1. Go to GitHub Settings → Developer settings → Personal access tokens
@@ -174,7 +187,7 @@ scripts/run_agent.sh
 **What this does:**
 - Automatically configures git to use your GitHub token for private repo access
 - No more username/password prompts for private repositories
-- Works with both HTTPS repository URLs
+- Works with HTTPS repository URLs as-is; SSH works when you mount keys or forward the agent
 
 ## High-level architecture
 

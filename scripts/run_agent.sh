@@ -47,6 +47,7 @@ AUTH_PORT_RANGE="${AUTH_PORT_RANGE:-1455-1465}"
 PERSIST_HOME="${PERSIST_HOME:-0}"
 
 CREDS_MOUNTS=()
+EXTRA_ENVS=()
 # Always persist CLI credentials/policy when doing browser login unless the caller disables it.
 if [[ "$AUTH_LOGIN" == "1" && "${PERSIST_POLICY:-unset}" == "unset" ]]; then
   PERSIST_POLICY=1
@@ -62,6 +63,19 @@ elif [[ "${PERSIST_POLICY:-0}" == "1" ]]; then
     -v "$PWD/.codex:/root/.config/codex"
     -v "$PWD/.openai:/root/.config/openai"
   )
+fi
+
+# Flexible GitHub auth options
+MOUNT_SSH="${MOUNT_SSH:-0}"
+FORWARD_SSH_AGENT="${FORWARD_SSH_AGENT:-0}"
+if [[ "$MOUNT_SSH" == "1" && -d "$HOME/.ssh" ]]; then
+  echo "Mounting host SSH keys from $HOME/.ssh (read-only)." >&2
+  CREDS_MOUNTS+=( -v "$HOME/.ssh:/root/.ssh:ro" )
+fi
+if [[ "$FORWARD_SSH_AGENT" == "1" && -n "${SSH_AUTH_SOCK:-}" ]]; then
+  echo "Forwarding SSH agent from host." >&2
+  CREDS_MOUNTS+=( -v "$SSH_AUTH_SOCK:/ssh-agent" )
+  EXTRA_ENVS+=( -e SSH_AUTH_SOCK=/ssh-agent )
 fi
 
 PUBLISH_FLAGS=()
@@ -109,5 +123,8 @@ exec docker run --rm -it --name "$NAME" \
   -e OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
   -e GITHUB_TOKEN="${GITHUB_TOKEN:-}" \
   -e GH_TOKEN="${GH_TOKEN:-}" \
+  -e GIT_TERMINAL_PROMPT=0 \
+  -e GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new" \
   -e CODEX_CLI_COMMAND="$CLI_CMD" \
+  "${EXTRA_ENVS[@]}" \
   "$IMAGE"
