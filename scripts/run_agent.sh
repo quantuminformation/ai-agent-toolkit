@@ -6,9 +6,16 @@ NAME="${NAME:-codex-agent}"
 CONFIG_DIR="${CONFIG_DIR:-$PWD/config}"
 WORK_DIR="${WORK_DIR:-$PWD/workspaces}"
 SCRIPTS_DIR="${SCRIPTS_DIR:-$PWD/scripts}"
-# Default: sync-only. No automatic login or CLI launch.
-AUTH_LOGIN="${AUTH_LOGIN:-0}"
-CLI_CMD_DEFAULT=""
+# When AUTH_LOGIN=1, default to interactive browser login then run the agent.
+# Auto-enable browser login if no API key is present and not requesting shell access
+if [[ -z "${OPENAI_API_KEY:-}" && "${CODEX_CLI_COMMAND:-}" != "/bin/bash" && -z "${AUTH_LOGIN:-}" ]]; then
+  AUTH_LOGIN="1"
+  echo "No API key found. Automatically enabling browser login..." >&2
+else
+  AUTH_LOGIN="${AUTH_LOGIN:-0}"
+fi
+
+CLI_CMD_DEFAULT="codex run"
 if [[ "$AUTH_LOGIN" == "1" ]]; then
   CLI_CMD_DEFAULT="codex auth login && codex run"
 fi
@@ -100,5 +107,7 @@ exec docker run --rm -it --name "$NAME" \
   "${CREDS_MOUNTS[@]}" \
   "${PUBLISH_FLAGS[@]}" \
   -e OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
+  -e GITHUB_TOKEN="${GITHUB_TOKEN:-}" \
+  -e GH_TOKEN="${GH_TOKEN:-}" \
   -e CODEX_CLI_COMMAND="$CLI_CMD" \
   "$IMAGE"

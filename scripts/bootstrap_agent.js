@@ -67,6 +67,48 @@ function resolveRepoPath(name, repoConfig) {
   return path.resolve(repoPath);
 }
 
+function setupGitAuthForGitHub() {
+  // Check if we have GitHub credentials configured
+  const hasGitHubToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+  const hasSSHKey = fs.existsSync('/root/.ssh/id_rsa') || fs.existsSync('/root/.ssh/id_ed25519');
+  
+  if (!hasGitHubToken && !hasSSHKey) {
+    console.log('No GitHub authentication found. For private repos, you may need to:');
+    console.log('1. Set GITHUB_TOKEN environment variable, or');
+    console.log('2. Mount SSH keys to /root/.ssh/');
+    return false;
+  }
+  
+  if (hasGitHubToken) {
+    // Configure git to use token for GitHub HTTPS URLs
+    const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+    try {
+      run('git', ['config', '--global', 'credential.helper', 'store']);
+      // Store credentials for github.com
+      const credentialsPath = '/root/.git-credentials';
+      const credentialsContent = `https://x-access-token:${token}@github.com\n`;
+      fs.writeFileSync(credentialsPath, credentialsContent, { mode: 0o600 });
+      console.log('Configured GitHub token authentication');
+      return true;
+    } catch (e) {
+      console.warn('Failed to configure GitHub token:', e.message);
+    }
+  }
+  
+  return hasSSHKey;
+}
+
+function convertToAuthenticatedURL(url) {
+  // If it's a GitHub HTTPS URL and we have a token, ensure it uses the token
+  if (url.includes('github.com') && url.startsWith('https://')) {
+    const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+    if (token && !url.includes('@')) {
+      return url.replace('https://github.com', `https://x-access-token:${token}@github.com`);
+    }
+  }
+  return url;
+}
+
 function remoteHasAnyHeads(url) {
   try {
     return Boolean(run("git", ["ls-remote", "--heads", url]));
@@ -93,8 +135,14 @@ function syncRepository(name, repoConfig) {
   }
 
   const repoPath = resolveRepoPath(name, repoConfig);
-  const url = repoConfig.url;
+  let url = repoConfig.url;
   const branch = repoConfig.branch || "main"; // single, simple rule
+  
+  // Set up GitHub authentication if needed
+  if (url.includes('github.com')) {
+    setupGitAuthForGitHub();
+    url = convertToAuthenticatedURL(url);
+  }
 
   fs.mkdirSync(path.dirname(repoPath), { recursive: true });
 

@@ -158,6 +158,24 @@ CODEX_CLI_COMMAND="" PUBLISH_AUTH_PORT=0 scripts/run_agent.sh
 - Doesn't start the AI agent
 - **Best for:** Just syncing your code repos without running AI
 
+### 6. Working with private GitHub repositories
+For private GitHub repositories, you need to provide authentication. The easiest way is to use a GitHub Personal Access Token:
+
+```bash
+export GITHUB_TOKEN="your-github-token-here"
+scripts/run_agent.sh
+```
+
+**To create a GitHub token:**
+1. Go to GitHub Settings → Developer settings → Personal access tokens
+2. Generate a new token (classic) with `repo` scope
+3. Copy the token and set it as `GITHUB_TOKEN` environment variable
+
+**What this does:**
+- Automatically configures git to use your GitHub token for private repo access
+- No more username/password prompts for private repositories
+- Works with both HTTPS repository URLs
+
 ## High-level architecture
 
 - Entry flow
